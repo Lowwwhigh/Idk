@@ -204,6 +204,7 @@ local function sFLY()
             elseif KEY == "Q" then
                 CONTROL.E = -flySpeed * 2
             end
+            -- pcall(function() workspace CurrentCamera.CameraType = Enum.CameraType.Track- end)
         end
     end)
     flyKeyUp = IYMouse.InputEnded:Connect(function(input)
@@ -237,7 +238,7 @@ local function NOFLY()
     if Players.LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
         Players.LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = false
     end
-    pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Custom end)
+    -- pcall(function() workspaceCurrentCamera.CameraType zz = Enum.CameraType.Custom end)
 end
 
 local function UnMobileFly()
@@ -304,7 +305,7 @@ local function MobileFly()
 
             VelocityHandler.MaxForce = v3inf
             GyroHandler.MaxTorque = v3inf
-            humanoid.PlatformStand = true
+            -- humanoid.PlatformStand =true
             GyroHandler.CFrame = camera.CoordinateFrame
             VelocityHandler.Velocity = v3none
 
@@ -2640,18 +2641,28 @@ Misc:Toggle({
     Callback = function(state)
         disableInjuriesEnabled = state
         if state then
-            injuriesConnection = RunService.RenderStepped:Connect(function()
-                pcall(function()
-                    
-                    task.wait(0.3)
-                    
-                    local player = Players.LocalPlayer
-                    local character = workspace.Live:FindFirstChild(player.Name)
-                    if character then
-                        local injuredWalking = character:FindFirstChild("InjuredWalking")
-                        if injuredWalking then
-                            injuredWalking:Destroy()
-                        end
+            -- Function to remove injured walking
+            local function removeInjuredWalking(character)
+                if not character then return end
+                local old = character:FindFirstChild("InjuredWalking")
+                if old then old:Destroy() end
+            end
+            
+            -- Remove from current character
+            local currentChar = game.Players.LocalPlayer.Character
+            if currentChar then
+                removeInjuredWalking(currentChar)
+            end
+            
+            -- Set up connection for future characters
+            injuriesConnection = game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
+                task.wait(0.5) -- Wait for character to fully load
+                removeInjuredWalking(character)
+                
+                -- Also monitor for new InjuredWalking objects being added
+                character.ChildAdded:Connect(function(child)
+                    if child.Name == "InjuredWalking" then
+                        child:Destroy()
                     end
                 end)
             end)
@@ -2664,7 +2675,6 @@ Misc:Toggle({
     end
 })
 
-
 local disableStunEnabled = false
 local stunConnection
 
@@ -2675,33 +2685,34 @@ Misc:Toggle({
     Callback = function(state)
         disableStunEnabled = state
         if state then
-            stunConnection = RunService.RenderStepped:Connect(function()
-                pcall(function()
-                    
-                    task.wait(0.3)
-                    
-                    local player = Players.LocalPlayer
-                    local character = workspace.Live:FindFirstChild(player.Name)
-                    if character then
-                        for _, descendant in pairs(character:GetDescendants()) do
-                            if string.find(string.lower(descendant.Name), "stun") then
-                                descendant:Destroy()
-                            end
-                        end
-                    end
-                end)
-            end)
-            
-            
-            Players.LocalPlayer.CharacterAdded:Connect(function(character)
-                if disableStunEnabled then
-                    task.wait(1) 
-                    for _, descendant in pairs(character:GetDescendants()) do
-                        if string.find(string.lower(descendant.Name), "stun") then
-                            descendant:Destroy()
-                        end
+            -- Function to remove stun/slow effects (case insensitive)
+            local function removeStunEffects(character)
+                if not character then return end
+                
+                for _, child in pairs(character:GetChildren()) do
+                    if string.lower(child.Name):find("stun") or string.lower(child.Name):find("slow") then
+                        child:Destroy()
                     end
                 end
+            end
+            
+            -- Remove from current character
+            local currentChar = game.Players.LocalPlayer.Character
+            if currentChar then
+                removeStunEffects(currentChar)
+            end
+            
+            -- Set up connection for future characters and monitoring
+            stunConnection = game.Players.LocalPlayer.CharacterAdded:Connect(function(character)
+                task.wait(0.5) -- Wait for character to fully load
+                removeStunEffects(character)
+                
+                -- Monitor for new stun/slow objects being added
+                character.ChildAdded:Connect(function(child)
+                    if string.lower(child.Name):find("stun") or string.lower(child.Name):find("slow") then
+                        child:Destroy()
+                    end
+                end)
             end)
         else
             if stunConnection then
