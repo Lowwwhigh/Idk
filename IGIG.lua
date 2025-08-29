@@ -123,40 +123,10 @@ local Visual = GameSection:Tab({
 
 Window:SelectTab(1)
 
--- Improved Tween Movement System for Player Attach and Hider Attach
-local function createTween(instance, goalCFrame, duration)
-    local tweenInfo = TweenInfo.new(
-        duration,
-        Enum.EasingStyle.Quad,
-        Enum.EasingDirection.Out,
-        0, -- RepeatCount
-        false, -- Reverses
-        0 -- DelayTime
-    )
-    
-    local tween = game:GetService("TweenService"):Create(instance, tweenInfo, {CFrame = goalCFrame})
-    tween:Play()
-    return tween
-end
-
 local lplr = game:GetService("Players").LocalPlayer
 
 local function CopyDiscordInvite()
     setclipboard("https://discord.gg/tuffguys")
-end
-
-local function rightClick()
-    local VirtualInputManager = game:GetService("VirtualInputManager")
-    local mouse = LocalPlayer:GetMouse()
-    
-    -- Simulate right mouse down and up
-    VirtualInputManager:SendMouseButtonEvent(
-        mouse.X, mouse.Y, 1, true, game, 1
-    )
-    task.wait(0.1)
-    VirtualInputManager:SendMouseButtonEvent(
-        mouse.X, mouse.Y, 1, false, game, 1
-    )
 end
 
 local flyToggle = false
@@ -234,7 +204,6 @@ local function sFLY()
             elseif KEY == "Q" then
                 CONTROL.E = -flySpeed * 2
             end
-            pcall(function() workspace.CurrentCamera.CameraType = Enum.CameraType.Track end)
         end
     end)
     flyKeyUp = IYMouse.InputEnded:Connect(function(input)
@@ -1415,7 +1384,7 @@ end
 
 Main:Toggle({
     Title = "Instant Grab Pole",
-    Desc = "Makes all proximity prompts instant in Sky Squid Game",
+    Desc = "Makes grab pole instant in Sky Squid Game",
     Value = false,
     Callback = function(state)
         instantGrabEnabled = state
@@ -2915,51 +2884,6 @@ LocalPlayer.CharacterAdded:Connect(function(character)
         slider.Callback(slider:GetValue())
     end
 end)
-
-
-local antiAFKEnabled = false
-local antiAFKConnection
-
-Misc:Toggle({
-    Title = "Anti AFK",
-    Desc = "Prevents you from being kicked for inactivity",
-    Value = false,
-    Callback = function(state)
-        antiAFKEnabled = state
-        if state then
-            
-            antiAFKConnection = RunService.RenderStepped:Connect(function()
-                pcall(function()
-                    
-                    if tick() % 30 < 0.1 then
-                        local VirtualInputManager = game:GetService("VirtualInputManager")
-                        VirtualInputManager:SendMouseMoveEvent(1, 1, game:GetService("Players").LocalPlayer.PlayerGui)
-                    end
-                    
-                    
-                    local VirtualUser = game:GetService("VirtualUser")
-                    VirtualUser:CaptureController()
-                    VirtualUser:SetKeyDown("0x01") 
-                    VirtualUser:SetKeyUp("0x01")
-                end)
-            end)
-            
-            
-            Players.LocalPlayer.Idled:Connect(function()
-                if antiAFKEnabled then
-                    game:GetService("VirtualUser"):Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                    task.wait(1)
-                    game:GetService("VirtualUser"):Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
-                end
-            end)
-        else
-            if antiAFKConnection then
-                antiAFKConnection:Disconnect()
-                antiAFKConnection = nil
-            end
-        end
-    end
-})
 
 
 local noclipEnabled = false
