@@ -129,6 +129,19 @@ local function CopyDiscordInvite()
     setclipboard("https://discord.gg/tuffguys")
 end
 
+local function FixCamera()
+    if LocalPlayer.Character then
+        Camera.CameraSubject = LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
+    end
+    
+    LocalPlayer.CharacterAdded:Connect(function(character)
+        task.wait(0.5)
+        Camera.CameraSubject = character:FindFirstChildOfClass("Humanoid")
+    end)
+end
+
+FixCamera()
+
 local flyToggle = false
 local flySpeed = 1
 local FLYING = false
