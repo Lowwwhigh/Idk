@@ -390,9 +390,11 @@ local function StopFly()
 end
 
 local function StartFly()
+    StopFly()
+    
     enabled = true
     FLYING = true
-    speed = flySpeed
+    speed = flySpeed * 50
     InitializeFly()
     StartFlyLoop()
 end
@@ -2785,7 +2787,7 @@ Misc:Divider()
 
 Misc:Slider({
     Title = "Fly Speed",
-    Value = { Min = 1, Max = 500, Default = 50 },
+    Value = { Min = 50, Max = 500, Default = 50 },
     Callback = function(value)
         flySpeed = value
         if enabled then
