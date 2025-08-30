@@ -145,198 +145,225 @@ FixCamera()
 local flyToggle = false
 local flySpeed = 1
 local FLYING = false
-local flyKeyDown, flyKeyUp, mfly1, mfly2
-local IYMouse = game:GetService("UserInputService")
+local flyConnection = nil
 
--- Fly pc
-local function sFLY()
-    repeat task.wait() until Players.LocalPlayer and Players.LocalPlayer.Character and Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart") and Players.LocalPlayer.Character:FindFirstChildOfClass("Humanoid")
-    repeat task.wait() until IYMouse
-    if flyKeyDown or flyKeyUp then flyKeyDown:Disconnect(); flyKeyUp:Disconnect() end
+-- New optimized fly system
+local UIS = game:GetService("UserInputService")
+local RS = game:GetService("RunService")
+local Players = game:GetService("Players")
+local player = Players.LocalPlayer
 
-    local T = Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-    local CONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-    local lCONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-    local SPEED = flySpeed
+local velocityControl = nil
+local speed = 50
+local enabled = false
+local inputVector = Vector3.zero
+local currentVelocity = Vector3.zero
+local lerpSpeed = 15
+local ySpeed = 35
+local currentYVelocity = 0
 
-    local function FLY()
-        FLYING = true
-        local BG = Instance.new('BodyGyro')
-        local BV = Instance.new('BodyVelocity')
-        BG.P = 9e4
-        BG.Parent = T
-        BV.Parent = T
-        BG.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        BG.CFrame = T.CFrame
-        BV.Velocity = Vector3.new(0, 0, 0)
-        BV.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        task.spawn(function()
-            while FLYING do
-                task.wait()
-                if not flyToggle and Players.LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
-                    Players.LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = true
-                end
-                if CONTROL.L + CONTROL.R ~= 0 or CONTROL.F + CONTROL.B ~= 0 or CONTROL.Q + CONTROL.E ~= 0 then
-                    SPEED = flySpeed
-                elseif not (CONTROL.L + CONTROL.R ~= 0 or CONTROL.F + CONTROL.B ~= 0 or CONTROL.Q + CONTROL.E ~= 0) and SPEED ~= 0 then
-                    SPEED = 0
-                end
-                if (CONTROL.L + CONTROL.R) ~= 0 or (CONTROL.F + CONTROL.B) ~= 0 or (CONTROL.Q + CONTROL.E) ~= 0 then
-                    BV.Velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (CONTROL.F + CONTROL.B)) + ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(CONTROL.L + CONTROL.R, (CONTROL.F + CONTROL.B + CONTROL.Q + CONTROL.E) * 0.2, 0).p) - workspace.CurrentCamera.CoordinateFrame.p)) * SPEED
-                    lCONTROL = {F = CONTROL.F, B = CONTROL.B, L = CONTROL.L, R = CONTROL.R}
-                elseif (CONTROL.L + CONTROL.R) == 0 and (CONTROL.F + CONTROL.B) == 0 and (CONTROL.Q + CONTROL.E) == 0 and SPEED ~= 0 then
-                    BV.Velocity = ((workspace.CurrentCamera.CoordinateFrame.lookVector * (lCONTROL.F + lCONTROL.B)) + ((workspace.CurrentCamera.CoordinateFrame * CFrame.new(lCONTROL.L + lCONTROL.R, (lCONTROL.F + lCONTROL.B + CONTROL.Q + CONTROL.E) * 0.2, 0).p) - workspace.CurrentCamera.CoordinateFrame.p)) * SPEED
-                else
-                    BV.Velocity = Vector3.new(0, 0, 0)
-                end
-                BG.CFrame = workspace.CurrentCamera.CoordinateFrame
-            end
-            CONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-            lCONTROL = {F = 0, B = 0, L = 0, R = 0, Q = 0, E = 0}
-            SPEED = 0
-            BG:Destroy()
-            BV:Destroy()
-            if Players.LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
-                Players.LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = false
-            end
-        end)
+local joystickTouch = nil
+local joystickStartPos = nil
+
+-- Initialize fly system
+local function InitializeFly()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local root = char:WaitForChild("HumanoidRootPart")
+    local humanoid = char:WaitForChild("Humanoid")
+
+    -- Clean up existing velocity control
+    if velocityControl then
+        velocityControl:Destroy()
     end
-    flyKeyDown = IYMouse.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            local KEY = input.KeyCode.Name
-            if KEY == "W" then
-                CONTROL.F = flySpeed
-            elseif KEY == "S" then
-                CONTROL.B = -flySpeed
-            elseif KEY == "A" then
-                CONTROL.L = -flySpeed
-            elseif KEY == "D" then 
-                CONTROL.R = flySpeed
-            elseif KEY == "E" then
-                CONTROL.Q = flySpeed * 2
-            elseif KEY == "Q" then
-                CONTROL.E = -flySpeed * 2
-            end
-            -- pcall(function() workspace CurrentCamera.CameraType = Enum.CameraType.Track- end)
-        end
-    end)
-    flyKeyUp = IYMouse.InputEnded:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.Keyboard then
-            local KEY = input.KeyCode.Name
-            if KEY == "W" then
-                CONTROL.F = 0
-            elseif KEY == "S" then
-                CONTROL.B = 0
-            elseif KEY == "A" then
-                CONTROL.L = 0
-            elseif KEY == "D" then
-                CONTROL.R = 0
-            elseif KEY == "E" then
-                CONTROL.Q = 0
-            elseif KEY == "Q" then
-                CONTROL.E = 0
-            end
-        end
-    end)
-    FLY()
+
+    velocityControl = Instance.new("BodyVelocity")
+    velocityControl.MaxForce = Vector3.new(1e9, 1e9, 1e9)
+    velocityControl.Velocity = Vector3.zero
+    velocityControl.P = 5000
+    velocityControl.Name = "JoystickVelocity"
+    velocityControl.Parent = root
+
+    -- Update speed based on flySpeed variable
+    speed = flySpeed * 50
 end
 
--- Fly mobile
-local function NOFLY()
+-- Touch controls for movement (mobile)
+local touchStartedConnection = UIS.TouchStarted:Connect(function(input)
+    if enabled and not joystickTouch then
+        local screenSize = workspace.CurrentCamera.ViewportSize
+        if input.Position.X < screenSize.X / 2 then
+            joystickTouch = input
+            joystickStartPos = input.Position
+        end
+    end
+end)
+
+local touchMovedConnection = UIS.TouchMoved:Connect(function(input)
+    if enabled and input == joystickTouch then
+        local delta = input.Position - joystickStartPos
+        local maxRadius = 100
+        if delta.Magnitude > maxRadius then
+            delta = delta.Unit * maxRadius
+        end
+        inputVector = Vector3.new(delta.X / maxRadius, 0, delta.Y / maxRadius)
+    end
+end)
+
+local touchEndedConnection = UIS.TouchEnded:Connect(function(input)
+    if enabled and input == joystickTouch then
+        joystickTouch = nil
+        inputVector = Vector3.zero
+    end
+end)
+
+-- Keyboard controls (PC)
+local keysPressed = {}
+local keyboardConnection = UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed or not enabled then return end
+    
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        keysPressed[input.KeyCode] = true
+    end
+end)
+
+local keyboardEndConnection = UIS.InputEnded:Connect(function(input, gameProcessed)
+    if input.UserInputType == Enum.UserInputType.Keyboard then
+        keysPressed[input.KeyCode] = false
+    end
+end)
+
+-- Camera management
+local camera = workspace.CurrentCamera
+local function updateCamera()
+    local character = player.Character
+    if not character then return end
+    local rootPart = character:FindFirstChild("HumanoidRootPart")
+    if not rootPart then return end
+
+    camera.CameraSubject = character:FindFirstChildOfClass("Humanoid") or rootPart
+    camera.CameraType = Enum.CameraType.Custom
+end
+
+-- Character respawn handler
+local characterAddedConnection = player.CharacterAdded:Connect(function()
+    task.wait(0.1)
+    if enabled then
+        InitializeFly()
+    end
+    updateCamera()
+end)
+
+updateCamera()
+
+-- Main fly loop
+local function StartFlyLoop()
+    if flyConnection then
+        flyConnection:Disconnect()
+    end
+    
+    flyConnection = RS.RenderStepped:Connect(function(dt)
+        local char = player.Character
+        if not char or not enabled or not velocityControl then return end
+        
+        local root = char:FindFirstChild("HumanoidRootPart")
+        local humanoid = char:FindFirstChild("Humanoid")
+        if not root or not humanoid then return end
+
+        local camCF = camera.CFrame
+        local camRight = camCF.RightVector
+        local camForward = camCF.LookVector
+
+        -- Make character always follow camera direction
+        local lookDirection = Vector3.new(camForward.X, 0, camForward.Z).Unit
+        if lookDirection.Magnitude > 0 then
+            root.CFrame = CFrame.lookAt(root.Position, root.Position + lookDirection)
+        end
+
+        local moveDir = Vector3.zero
+        
+        -- Handle keyboard input (PC)
+        if keysPressed[Enum.KeyCode.W] or keysPressed[Enum.KeyCode.A] or 
+           keysPressed[Enum.KeyCode.S] or keysPressed[Enum.KeyCode.D] or
+           keysPressed[Enum.KeyCode.Q] or keysPressed[Enum.KeyCode.E] then
+            
+            local keyboardInput = Vector3.zero
+            if keysPressed[Enum.KeyCode.W] then keyboardInput = keyboardInput + Vector3.new(0, 0, -1) end
+            if keysPressed[Enum.KeyCode.S] then keyboardInput = keyboardInput + Vector3.new(0, 0, 1) end
+            if keysPressed[Enum.KeyCode.A] then keyboardInput = keyboardInput + Vector3.new(-1, 0, 0) end
+            if keysPressed[Enum.KeyCode.D] then keyboardInput = keyboardInput + Vector3.new(1, 0, 0) end
+            
+            local camRightFlat = Vector3.new(camRight.X, 0, camRight.Z).Unit
+            local camForwardFlat = Vector3.new(camForward.X, 0, camForward.Z).Unit
+            
+            moveDir = (camRightFlat * keyboardInput.X + camForwardFlat * keyboardInput.Z)
+            local targetVelocity = moveDir * speed
+            currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 1))
+            
+            -- Vertical movement for keyboard
+            local yInput = 0
+            if keysPressed[Enum.KeyCode.E] then yInput = 1 end
+            if keysPressed[Enum.KeyCode.Q] then yInput = -1 end
+            
+            local targetYVelocity = yInput * ySpeed
+            currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt, 0, 1)
+            
+        -- Handle touch input (mobile)
+        elseif inputVector.Magnitude > 0.1 then
+            local camRightFlat = Vector3.new(camRight.X, 0, camRight.Z).Unit
+            local camForwardFlat = Vector3.new(camForward.X, 0, camForward.Z).Unit
+            
+            moveDir = (camRightFlat * inputVector.X + camForwardFlat * -inputVector.Z)
+            local targetVelocity = moveDir * speed
+            currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 1))
+            
+            -- Vertical movement based on camera look direction
+            local targetYVelocity = -camForward.Y * inputVector.Z * ySpeed
+            currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt, 0, 1)
+        else
+            -- No input, slow down
+            currentVelocity = currentVelocity:Lerp(Vector3.zero, math.clamp(lerpSpeed * dt, 0, 1))
+            currentYVelocity = currentYVelocity + (0 - currentYVelocity) * math.clamp(lerpSpeed * dt, 0, 1)
+        end
+
+        velocityControl.Velocity = Vector3.new(currentVelocity.X, currentYVelocity, currentVelocity.Z)
+    end)
+end
+
+local function StopFly()
+    enabled = false
     FLYING = false
-    if flyKeyDown then flyKeyDown:Disconnect() end
-    if flyKeyUp then flyKeyUp:Disconnect() end
-    if mfly1 then mfly1:Disconnect() end
-    if mfly2 then mfly2:Disconnect() end
-    if Players.LocalPlayer.Character:FindFirstChildOfClass('Humanoid') then
-        Players.LocalPlayer.Character:FindFirstChildOfClass('Humanoid').PlatformStand = false
+    
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
     end
-    -- pcall(function() workspaceCurrentCamera.CameraType zz = Enum.CameraType.Custom end)
-end
-
-local function UnMobileFly()
-    pcall(function()
-        FLYING = false
-        local root = Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-        if root:FindFirstChild("BodyVelocity") then root:FindFirstChild("BodyVelocity"):Destroy() end
-        if root:FindFirstChild("BodyGyro") then root:FindFirstChild("BodyGyro"):Destroy() end
-        if Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid") then
-            Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid").PlatformStand = false
+    
+    if velocityControl then
+        velocityControl:Destroy()
+        velocityControl = nil
+    end
+    
+    -- Reset character state
+    local char = player.Character
+    if char then
+        local humanoid = char:FindFirstChildOfClass("Humanoid")
+        if humanoid then
+            humanoid.PlatformStand = false
         end
-        if mfly1 then mfly1:Disconnect() end
-        if mfly2 then mfly2:Disconnect() end
-    end)
+    end
+    
+    -- Reset variables
+    inputVector = Vector3.zero
+    currentVelocity = Vector3.zero
+    currentYVelocity = 0
+    joystickTouch = nil
 end
 
-local function MobileFly()
-    UnMobileFly()
+local function StartFly()
+    enabled = true
     FLYING = true
-
-    local root = Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-    local camera = workspace.CurrentCamera
-    local v3none = Vector3.new()
-    local v3zero = Vector3.new(0, 0, 0)
-    local v3inf = Vector3.new(9e9, 9e9, 9e9)
-
-    local controlModule = require(Players.LocalPlayer.PlayerScripts:WaitForChild("PlayerModule"):WaitForChild("ControlModule"))
-    local bv = Instance.new("BodyVelocity")
-    bv.Name = "BodyVelocity"
-    bv.Parent = root
-    bv.MaxForce = v3zero
-    bv.Velocity = v3zero
-
-    local bg = Instance.new("BodyGyro")
-    bg.Name = "BodyGyro"
-    bg.Parent = root
-    bg.MaxTorque = v3inf
-    bg.P = 1000
-    bg.D = 50
-
-    mfly1 = Players.LocalPlayer.CharacterAdded:Connect(function()
-        local newRoot = Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-        local newBv = Instance.new("BodyVelocity")
-        newBv.Name = "BodyVelocity"
-        newBv.Parent = newRoot
-        newBv.MaxForce = v3zero
-        newBv.Velocity = v3zero
-
-        local newBg = Instance.new("BodyGyro")
-        newBg.Name = "BodyGyro"
-        newBg.Parent = newRoot
-        newBg.MaxTorque = v3inf
-        newBg.P = 1000
-        newBg.D = 50
-    end)
-
-    mfly2 = game:GetService("RunService").RenderStepped:Connect(function()
-        root = Players.LocalPlayer.Character:WaitForChild("HumanoidRootPart")
-        camera = workspace.CurrentCamera
-        if Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid") and root and root:FindFirstChild("BodyVelocity") and root:FindFirstChild("BodyGyro") then
-            local humanoid = Players.LocalPlayer.Character:FindFirstChildWhichIsA("Humanoid")
-            local VelocityHandler = root:FindFirstChild("BodyVelocity")
-            local GyroHandler = root:FindFirstChild("BodyGyro")
-
-            VelocityHandler.MaxForce = v3inf
-            GyroHandler.MaxTorque = v3inf
-            -- humanoid.PlatformStand =true
-            GyroHandler.CFrame = camera.CoordinateFrame
-            VelocityHandler.Velocity = v3none
-
-            local direction = controlModule:GetMoveVector()
-            if direction.X > 0 then
-                VelocityHandler.Velocity = VelocityHandler.Velocity + camera.CFrame.RightVector * (direction.X * (flySpeed * 50))
-            end
-            if direction.X < 0 then
-                VelocityHandler.Velocity = VelocityHandler.Velocity + camera.CFrame.RightVector * (direction.X * (flySpeed * 50))
-            end
-            if direction.Z > 0 then
-                VelocityHandler.Velocity = VelocityHandler.Velocity - camera.CFrame.LookVector * (direction.Z * (flySpeed * 50))
-            end
-            if direction.Z < 0 then
-                VelocityHandler.Velocity = VelocityHandler.Velocity - camera.CFrame.LookVector * (direction.Z * (flySpeed * 50))
-            end
-        end
-    end)
+    InitializeFly()
+    StartFlyLoop()
 end
 
 Discord:Paragraph({
@@ -395,7 +422,7 @@ Main:Toggle({
 
                 -- Main fling logic
                 local flingActive = true
-                local flingConnection = RunService.Heartbeat:Connect(function()
+                local flingConnection = RunService.RenderStepped:Connect(function()
                     if not flingActive or not HumanoidRootPart or not HumanoidRootPart.Parent then
                         flingConnection:Disconnect()
                         return
@@ -1777,7 +1804,7 @@ Combat:Toggle({
                     return closestPlayer
                 end
 
-                connection = RunService.Heartbeat:Connect(function()
+                connection = RunService.RenderStepped:Connect(function()
                     local target = getClosestPlayer()
                     if target and target.Character then
                         local targetHrp = target.Character:FindFirstChild("HumanoidRootPart")
@@ -2606,22 +2633,11 @@ Misc:Divider()
 
 Misc:Slider({
     Title = "Fly Speed",
-    Value = { Min = 1, Max = 20, Default = 1 },
+    Value = { Min = 1, Max = 500, Default = 50 },
     Callback = function(value)
         flySpeed = value
-        if FLYING then
-            task.spawn(function()
-                while FLYING do
-                    task.wait(0.1)
-                    if game:GetService("UserInputService").TouchEnabled then
-                        local root = Players.LocalPlayer.Character and Players.LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                        if root and root:FindFirstChild("BodyVelocity") then
-                            local bv = root:FindFirstChild("BodyVelocity")
-                            bv.Velocity = bv.Velocity.Unit * (flySpeed * 50) -- Adjust velocity magnitude
-                        end
-                    end
-                end
-            end)
+        if enabled then
+            speed = flySpeed
         end
     end
 })
@@ -2632,14 +2648,9 @@ Misc:Toggle({
     Callback = function(state)
         flyToggle = state
         if flyToggle then
-            if game:GetService("UserInputService").TouchEnabled then
-                MobileFly()
-            else
-                sFLY()
-            end
+            StartFly()
         else
-            NOFLY()
-            UnMobileFly()
+            StopFly()
         end
     end
 })
