@@ -6,6 +6,16 @@ if not success then
     warn("Failed to load WindUI:", WindUI)
     return
 end
+
+local correctGameId = 125009265613167
+if game.PlaceId ~= correctGameId then
+    WindUI:Notify({
+        Title = "Incorrect Game",
+        Content = "This script only works in the correct game.",
+        Duration = 10
+    })
+    return -- Stop the script entirely
+end
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -392,72 +402,6 @@ Discord:Paragraph({
 
 Main:Section({Title = "OP"})
 Main:Divider()
-
-Main:Button({
-    Title = "Anti Lag",
-    Desc = "Temporarily moves camera and freezes player to reduce lag",
-    Callback = function()
-        -- Store original values
-        local originalCameraCFrame = Camera.CFrame
-        local originalCameraType = Camera.CameraType
-        local originalHumanoidState
-        
-        -- Freeze player movement
-        local character = LocalPlayer.Character
-        if character then
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                originalHumanoidState = humanoid:GetState()
-                humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-            end
-        end
-        
-        -- Move camera to random position
-        local randomOffset = Vector3.new(
-            math.random(-50, 50),
-            math.random(10, 30),
-            math.random(-50, 50)
-        )
-        local randomCameraCFrame = CFrame.new(Camera.CFrame.Position + randomOffset)
-        Camera.CameraType = Enum.CameraType.Scriptable
-        Camera.CFrame = randomCameraCFrame
-        
-        -- Notify user
-        WindUI:Notify({
-            Title = "Anti Lag",
-            Content = "Reducing lag for 3 seconds...",
-            Duration = 3
-        })
-        
-        -- Wait for 3 seconds
-        task.wait(3)
-        
-        -- Restore original camera position and settings
-        Camera.CFrame = originalCameraCFrame
-        Camera.CameraType = originalCameraType
-        
-        -- Restore player movement
-        if character then
-            local humanoid = character:FindFirstChildOfClass("Humanoid")
-            if humanoid then
-                humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
-                task.wait(0.5)
-                if originalHumanoidState then
-                    humanoid:ChangeState(originalHumanoidState)
-                else
-                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                end
-            end
-        end
-        
-        -- Final notification
-        WindUI:Notify({
-            Title = "Anti Lag",
-            Content = "Lag reduction complete!",
-            Duration = 2
-        })
-    end
-})
 
 local touchFlingEnabled = false
 local touchFlingConnection = nil
