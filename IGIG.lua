@@ -7,14 +7,24 @@ if not success then
     return
 end
 
-local correctGameId = 125009265613167
-if game.PlaceId ~= correctGameId then
+local correctGameIds = {
+    125009265613167,
+    122816944483266
+}
+local isCorrectGame = false
+for _, id in ipairs(correctGameIds) do
+    if game.PlaceId == id then
+        isCorrectGame = true
+        break
+    end
+end
+if not isCorrectGame then
     WindUI:Notify({
-        Title = "Incorrect Game",
-        Content = "This script only works in the correct game.",
+        Title = "Only InGame",
+        Content = "This script only works ingame.",
         Duration = 10
     })
-    return -- Stop the script entirely
+    return
 end
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
@@ -41,7 +51,7 @@ local bringGuardsEnabled = false
 local bringGuardsConnection = nil
 
 local Window = WindUI:CreateWindow({
-    Title = "Tuff Guys | Ink Game V6",
+    Title = "Tuff Guys | Ink Game V7",
     Icon = "rbxassetid://130506306640152",
     IconThemed = true,
     Author = "Tuff Agsy",
@@ -90,8 +100,8 @@ local UL = MainSection:Tab({
 })
 
 UL:Paragraph({
-    Title = "CHANGELOGS V6",
-    Desc = "[~] Fixed Fling Aura\n[+] Added Face Closest Player\n[+] Added Freeze Rope\n[+] Added No Cooldown Phantom Dash\n[+] Added Void For Bring Injured Players\n[~] Improved Troll Mode",
+    Title = "CHANGELOGS V7",
+    Desc = "[-] Deleted Features That Activates Anti-Cheat\n[~] Fixed Fly Banning you\n[+] Added Sky Squid Game Features\n[+] Added Anti spike Hide and Seek",
     Image = "rbxassetid://130506306640152",
 })
 
@@ -353,6 +363,13 @@ local function StopFly()
         velocityControl = nil
     end
     
+    -- Reset ALL movement variables completely
+    inputVector = Vector3.zero
+    currentVelocity = Vector3.zero
+    currentYVelocity = 0
+    joystickTouch = nil
+    keysPressed = {} -- This is important!
+    
     -- Reset character state
     local char = player.Character
     if char then
@@ -360,18 +377,20 @@ local function StopFly()
         if humanoid then
             humanoid.PlatformStand = false
         end
+        
+        -- Also reset any residual velocity
+        local root = char:FindFirstChild("HumanoidRootPart")
+        if root then
+            root.Velocity = Vector3.new(0, 0, 0)
+            root.RotVelocity = Vector3.new(0, 0, 0)
+        end
     end
-    
-    -- Reset variables
-    inputVector = Vector3.zero
-    currentVelocity = Vector3.zero
-    currentYVelocity = 0
-    joystickTouch = nil
 end
 
 local function StartFly()
     enabled = true
     FLYING = true
+    speed = flySpeed
     InitializeFly()
     StartFlyLoop()
 end
@@ -526,7 +545,6 @@ Main:Toggle({
         end
     end
 })
-
 
 Main:Section({Title = "Red Light Green Light"})
 Main:Divider()
@@ -1183,12 +1201,11 @@ local autoPullEnabled = false
 local autoPullCleanup
 local autoPullMode = "Blatant" 
 
-function AutoPullRope(perfectPull)
+function AutoPullRope()
     if autoPullMode == "Blatant" then
-        
         local ReplicatedStorage = game:GetService("ReplicatedStorage")
-        local RunService = game:GetService("RunService")
-        local Remote = ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("TemporaryReachedBindable")
+        local Remotes = ReplicatedStorage:WaitForChild("Remotes")
+        local TugOfWarRemote = Remotes:WaitForChild("TemporaryReachedBindable")
         
         WindUI:Notify({
             Title = "Auto Pull Rope",
@@ -1198,10 +1215,7 @@ function AutoPullRope(perfectPull)
 
         local connection
         local function pull()
-            local args = perfectPull and {{GameQTE = true, Perfect = true}} or {{Failed = true}}
-            Remote:FireServer(unpack(args))
-            task.wait(0.03)
-            Remote:FireServer(unpack(args))
+            TugOfWarRemote:FireServer({GameQTE = true})
         end
 
         connection = RunService.RenderStepped:Connect(pull)
@@ -1213,13 +1227,13 @@ function AutoPullRope(perfectPull)
             end
         end
     else
-        
+        -- Legit mode using direct input simulation instead of VirtualInputManager
         local connection
         local lastClickTime = 0
         local clickCooldown = 0.1 
         
         local function checkAndPull()
-            
+            -- Check if we're in a QTE event
             local playerGui = game:GetService("Players").LocalPlayer.PlayerGui
             local qteEvents = playerGui:WaitForChild("QTEEvents")
             if not qteEvents then return end
@@ -1227,28 +1241,20 @@ function AutoPullRope(perfectPull)
             local progress = qteEvents:FindFirstChild("Progress")
             if not progress then return end
             
-            
+            -- Check if crosshair is near goal
             local crossHair = progress:FindFirstChild("CrossHair")
             local goalDot = progress:FindFirstChild("GoalDot")
             if not crossHair or not goalDot then return end
             
-            
+            -- Calculate angle difference
             local angleDiff = math.abs((crossHair.Rotation - goalDot.Rotation + 180) % 360 - 180)
             
-            
+            -- If within acceptable range, simulate space press
             if angleDiff <= 26 then 
                 local currentTime = tick()
                 if currentTime - lastClickTime >= clickCooldown then
-                    
-                    local VirtualInputManager = game:GetService("VirtualInputManager")
-                    
-                    
-                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Space, false, game)
-                    task.wait(0.05) 
-                    
-                    
-                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Space, false, game)
-                    
+                    -- Directly fire the remote instead of using VirtualInputManager
+                    game:GetService("ReplicatedStorage").Remotes.TemporaryReachedBindable:FireServer({GameQTE = true})
                     lastClickTime = currentTime
                 end
             end
@@ -1265,68 +1271,15 @@ function AutoPullRope(perfectPull)
     end
 end
 
-local function InstantTugOfWarWin()
-    -- Verify game state
-    if not (workspace.Values.CurrentGame.Value == "TugOfWar") then return end
-
-    -- Get the TugOfWarClient module
-    local tugModule
-    for _, module in pairs(getgc()) do
-        if typeof(module) == "table" and rawget(module, "__index") and getfenv(rawget(module, "__index")).script == game:GetService("ReplicatedStorage").Modules.Games.TugOfWarClient then
-            tugModule = module
-            break
-        end
-    end
-    if not tugModule then return end
-
-    -- Force immediate win by manipulating the module's state
-    pcall(function()
-        -- Override core gameplay variables
-        debug.setupvalue(tugModule.__index, 24, 360)   -- Max rotation (v_u_24)
-        debug.setupvalue(tugModule.__index, 25, -999)  -- Inverted difficulty (v_u_25)
-        debug.setupvalue(tugModule.__index, 26, 0)     -- Remove randomness (v_u_26)
-        debug.setupvalue(tugModule.__index, 21, true)  -- Always in success zone (v_u_21)
-        debug.setupvalue(tugModule.__index, 22, nil)   -- Disable fail timer (v_u_22)
-
-        -- Force visual victory
-        local remote = game:GetService("ReplicatedStorage").Remotes:FindFirstChild("TemporaryReachedBindable")
-        if remote then
-            remote:FireServer({GameQTE = true, Perfect = true})
-            remote:FireServer({GameQTE = true, Perfect = true}) -- Double fire for reliability
-        end
-
-        -- Update UI instantly
-        local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
-        local qteEvents = playerGui:WaitForChild("QTEEvents")
-        if qteEvents then
-            local progress = qteEvents:FindFirstChild("Progress")
-            if progress then
-                progress.CrossHair.Rotation = 180
-                if progress:FindFirstChild("GoalDot") then
-                    progress.GoalDot.Rotation = 180
-                end
-                if progress:FindFirstChild("Center") and progress.Center:FindFirstChild("ImageLabel") then
-                    progress.Center.ImageLabel.ImageColor3 = Color3.fromRGB(0, 255, 0)
-                end
-            end
-        end
-    end)
-end
-
-
 Main:Dropdown({
     Title = "Pull Mode",
-    Values = {"Blatant", "Legit", "Instant [BETA]"},
+    Values = {"Blatant", "Legit [Same as Blatant But Legit]"},
     Default = "Blatant",
     Callback = function(selected)
         autoPullMode = selected
         if autoPullEnabled and autoPullCleanup then
             autoPullCleanup()
-            if selected == "Instant" then
-                autoPullCleanup = InstantTugOfWarWin()
-            else
-                autoPullCleanup = AutoPullRope(true)
-            end
+            autoPullCleanup = AutoPullRope()
         end
     end
 })
@@ -1338,11 +1291,7 @@ Main:Toggle({
     Callback = function(state)
         autoPullEnabled = state
         if state then
-            if autoPullMode == "Instant" then
-                autoPullCleanup = InstantTugOfWarWin()
-            else
-                autoPullCleanup = AutoPullRope(true)
-            end
+            autoPullCleanup = AutoPullRope()
         else
             if autoPullCleanup then
                 if type(autoPullCleanup) == "function" then
@@ -1468,69 +1417,101 @@ Main:Toggle({
     end
 })
 
-Main:Section({Title = "Movement"})
+Main:Section({Title = "Other"})
 Main:Divider()
 
--- Add this after the existing movement options
-local phantomDashEnabled = false
-local phantomDashCleanup = nil
+local collectBandageEnabled = false
+local collectBandageConnection = nil
 
-Main:Toggle({
-    Title = "No Cooldown Phantom Dash",
-    Desc = "Removes cooldown from Phantom Step dash ability",
-    Value = false,
-    Callback = function(state)
-        phantomDashEnabled = state
-        if state then
-            -- Start the infinite dash system
-            local function InfinitePhantomDash()
-                local character = game.Players.LocalPlayer.Character or game.Players.LocalPlayer.CharacterAdded:Wait()
-                local dashCooldownConnection
-                
-                local function removeCooldown()
-                    for _, child in ipairs(character:GetChildren()) do
-                        if child.Name == "CDDASHSTACKSCD" then
-                            child:Destroy()
+local function HasTool(toolName)
+    -- Check character and backpack for the tool
+    for _, v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
+        if v:IsA("Tool") and v.Name == toolName then
+            return true
+        end
+    end
+    for _, v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+        if v:IsA("Tool") and v.Name == toolName then
+            return true
+        end
+    end
+    return false
+end
+
+local function CollectBandageLoop()
+    while collectBandageEnabled do
+        local OldCFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+        if not HasTool("Bandage") then
+            repeat
+                task.wait()
+                if workspace:FindFirstChild("Effects") then
+                    for _, v in pairs(workspace.Effects:GetChildren()) do
+                        if v.Name == "DroppedBandage" and v:FindFirstChild("Handle") then
+                            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = v.Handle.CFrame
+                            break
                         end
                     end
                 end
+            until HasTool("Bandage") or not collectBandageEnabled
+            task.wait(0.3)
+            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrame
+        end
+        task.wait()
+    end
+end
 
-                -- Main handler
-                dashCooldownConnection = character.ChildAdded:Connect(function(child)
-                    if child.Name == "CDDASHSTACKSCD" then
-                        task.wait(0.1) -- Small delay to avoid race conditions
-                        removeCooldown()
-                    end
-                end)
+Main:Toggle({
+    Title = "Auto Collect Bandage",
+    Desc = "Automatically collects bandages",
+    Value = false,
+    Callback = function(state)
+        collectBandageEnabled = state
+        if state then
+            if collectBandageConnection then
+                collectBandageConnection:Disconnect()
+            end
+            collectBandageConnection = task.spawn(CollectBandageLoop)
+        else
+            if collectBandageConnection then
+                task.cancel(collectBandageConnection)
+                collectBandageConnection = nil
+            end
+        end
+    end
+})
 
-                -- Initial cleanup
-                removeCooldown()
+-- Add Anti Banana toggle
+local antiBananaEnabled = false
+local antiBananaConnection = nil
 
-                -- Cleanup
-                return function()
-                    if dashCooldownConnection then
-                        dashCooldownConnection:Disconnect()
-                    end
+local function AntiBananaLoop()
+    while antiBananaEnabled do
+        if workspace:FindFirstChild("Effects") then
+            for _, v in pairs(workspace.Effects:GetChildren()) do
+                if v.Name:find("Banana") then
+                    v:Destroy()
                 end
             end
+        end
+        task.wait()
+    end
+end
 
-            phantomDashCleanup = InfinitePhantomDash()
-            
-            -- Reapply on respawn
-            game.Players.LocalPlayer.CharacterAdded:Connect(function()
-                task.wait(1) -- Wait for character to fully load
-                if phantomDashEnabled then
-                    if phantomDashCleanup then
-                        phantomDashCleanup()
-                    end
-                    phantomDashCleanup = InfinitePhantomDash()
-                end
-            end)
+Main:Toggle({
+    Title = "Anti Banana",
+    Desc = "Automatically removes bananas",
+    Value = false,
+    Callback = function(state)
+        antiBananaEnabled = state
+        if state then
+            if antiBananaConnection then
+                antiBananaConnection:Disconnect()
+            end
+            antiBananaConnection = task.spawn(AntiBananaLoop)
         else
-            -- Cleanup
-            if phantomDashCleanup then
-                phantomDashCleanup()
-                phantomDashCleanup = nil
+            if antiBananaConnection then
+                task.cancel(antiBananaConnection)
+                antiBananaConnection = nil
             end
         end
     end
@@ -2192,6 +2173,70 @@ Utility:Button({
             local player = game:GetService("Players").LocalPlayer
             player:SetAttribute("_EquippedPower", "PHANTOM STEP")
         end)
+    end
+})
+
+local phantomDashEnabled = false
+local phantomDashCleanup = nil
+
+Main:Toggle({
+    Title = "No Cooldown Phantom Step",
+    Desc = "Removes cooldown from Phantom Step dash ability",
+    Value = false,
+    Callback = function(state)
+        phantomDashEnabled = state
+        if state then
+            -- Start the infinite dash system
+            local function InfinitePhantomDash()
+                local character = game.Players.LocalPlayer.Character or game.Players.LocalPlayer.CharacterAdded:Wait()
+                local dashCooldownConnection
+                
+                local function removeCooldown()
+                    for _, child in ipairs(character:GetChildren()) do
+                        if child.Name == "CDDASHSTACKSCD" then
+                            child:Destroy()
+                        end
+                    end
+                end
+
+                -- Main handler
+                dashCooldownConnection = character.ChildAdded:Connect(function(child)
+                    if child.Name == "CDDASHSTACKSCD" then
+                        task.wait(0.1) -- Small delay to avoid race conditions
+                        removeCooldown()
+                    end
+                end)
+
+                -- Initial cleanup
+                removeCooldown()
+
+                -- Cleanup
+                return function()
+                    if dashCooldownConnection then
+                        dashCooldownConnection:Disconnect()
+                    end
+                end
+            end
+
+            phantomDashCleanup = InfinitePhantomDash()
+            
+            -- Reapply on respawn
+            game.Players.LocalPlayer.CharacterAdded:Connect(function()
+                task.wait(1) -- Wait for character to fully load
+                if phantomDashEnabled then
+                    if phantomDashCleanup then
+                        phantomDashCleanup()
+                    end
+                    phantomDashCleanup = InfinitePhantomDash()
+                end
+            end)
+        else
+            -- Cleanup
+            if phantomDashCleanup then
+                phantomDashCleanup()
+                phantomDashCleanup = nil
+            end
+        end
     end
 })
 
