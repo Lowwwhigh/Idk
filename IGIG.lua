@@ -275,7 +275,7 @@ end)
 
 updateCamera()
 
--- Main fly loop
+-- Replace the existing fly loop with this updated version
 local function StartFlyLoop()
     if flyConnection then
         flyConnection:Disconnect()
@@ -319,12 +319,13 @@ local function StartFlyLoop()
             local targetVelocity = moveDir * speed
             currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 1))
             
-            -- Vertical movement for keyboard
+            -- Vertical movement for keyboard (increased speed)
             local yInput = 0
             if keysPressed[Enum.KeyCode.E] then yInput = 1 end
             if keysPressed[Enum.KeyCode.Q] then yInput = -1 end
             
-            local targetYVelocity = yInput * ySpeed
+            -- Double the vertical speed for faster up/down movement
+            local targetYVelocity = yInput * ySpeed * 2
             currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt, 0, 1)
             
         -- Handle touch input (mobile)
@@ -336,8 +337,9 @@ local function StartFlyLoop()
             local targetVelocity = moveDir * speed
             currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 1))
             
-            -- Vertical movement based on camera look direction
-            local targetYVelocity = -camForward.Y * inputVector.Z * ySpeed
+            -- Vertical movement based on camera look direction (increased speed)
+            -- Double the vertical speed for faster up/down movement
+            local targetYVelocity = -camForward.Y * inputVector.Z * ySpeed * 2
             currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt, 0, 1)
         else
             -- No input, slow down
@@ -1352,33 +1354,35 @@ local instantGrabConnection = nil
 local function SetupInstantGrab()
     if not instantGrabEnabled then return end
     
-    -- Check if we're in a Sky Squid Game variant
+    -- Check if we're in Sky Squid Game
     local currentGame = workspace.Values.CurrentGame
-    if not currentGame then return end
+    if not currentGame or currentGame.Value ~= "SkySquidGame" then return end
     
-    local gameName = currentGame.Value
-    local isSkySquidGame = false
+    -- Wait for the map and pole
+    local success, map = pcall(function()
+        return workspace:WaitForChild("SkySquidGamesMap", 5)
+    end)
     
-    -- Check for various name variations of Sky Squid Game
-    local skySquidVariations = {
-        "SkySquidGame", "SkySquidGames", "Sky Squid Game", "SKYSQUIDGAME",
-        "SkySquid"
-    }
+    if not success or not map then return end
     
-    for _, variation in ipairs(skySquidVariations) do
-        if string.find(string.upper(gameName), string.upper(variation)) then
-            isSkySquidGame = true
+    local poleWeapons = map:FindFirstChild("PoleWeapons")
+    if not poleWeapons then return end
+    
+    -- Find InkPole (case insensitive search)
+    local inkPole
+    for _, child in ipairs(poleWeapons:GetChildren()) do
+        if string.lower(child.Name):find("inkpole") then
+            inkPole = child
             break
         end
     end
     
-    if not isSkySquidGame then return end
+    if not inkPole then return end
     
-    -- Set all proximity prompts to instant grab
-    for _, descendant in ipairs(workspace:GetDescendants()) do
-        if descendant:IsA("ProximityPrompt") then
-            descendant.HoldDuration = 0
-        end
+    -- Find Pickup Pole proximity prompt
+    local pickupPole = inkPole:FindFirstChild("Pickup Pole")
+    if pickupPole and pickupPole:IsA("ProximityPrompt") then
+        pickupPole.HoldDuration = 0
     end
 end
 
@@ -1394,7 +1398,7 @@ Main:Toggle({
             
             -- Set up connection to monitor for new prompts
             instantGrabConnection = workspace.DescendantAdded:Connect(function(descendant)
-                if instantGrabEnabled and descendant:IsA("ProximityPrompt") then
+                if instantGrabEnabled and descendant:IsA("ProximityPrompt") and descendant.Name == "Pickup Pole" then
                     descendant.HoldDuration = 0
                 end
             end)
@@ -1412,6 +1416,99 @@ Main:Toggle({
             if instantGrabConnection then
                 instantGrabConnection:Disconnect()
                 instantGrabConnection = nil
+            end
+        end
+    end
+})
+
+local autoPickupPoleEnabled = false
+local autoPickupPoleConnection = nil
+
+local function AutoPickupPole()
+    if not autoPickupPoleEnabled then return end
+    
+    -- Check if we're in Sky Squid Game
+    local currentGame = workspace.Values.CurrentGame
+    if not currentGame or currentGame.Value ~= "SkySquidGame" then return end
+    
+    -- Check if we already have a pole
+    local character = LocalPlayer.Character
+    if not character then return end
+    
+    local hasPole = false
+    for _, tool in ipairs(character:GetChildren()) do
+        if tool:IsA("Tool") and string.lower(tool.Name):find("pole") then
+            hasPole = true
+            break
+        end
+    end
+    
+    if hasPole then return end
+    
+    -- Wait for the map and pole
+    local success, map = pcall(function()
+        return workspace:WaitForChild("SkySquidGamesMap", 5)
+    end)
+    
+    if not success or not map then return end
+    
+    local poleWeapons = map:FindFirstChild("PoleWeapons")
+    if not poleWeapons then return end
+    
+    -- Find InkPole (case insensitive search)
+    local inkPole
+    for _, child in ipairs(poleWeapons:GetChildren()) do
+        if string.lower(child.Name):find("inkpole") then
+            inkPole = child
+            break
+        end
+    end
+    
+    if not inkPole then return end
+    
+    -- Find Pickup Pole proximity prompt
+    local pickupPole = inkPole:FindFirstChild("Pickup Pole")
+    if not pickupPole or not pickupPole:IsA("ProximityPrompt") then return end
+    
+    -- Teleport to the pole (not the prompt)
+    if character:FindFirstChild("HumanoidRootPart") then
+        character:PivotTo(inkPole:GetPrimaryPartCFrame() + Vector3.new(0, 3, 0))
+        task.wait(0.2)
+        
+        -- Fire the proximity prompt
+        fireproximityprompt(pickupPole)
+    end
+end
+
+Main:Toggle({
+    Title = "Auto Pick Up Pole",
+    Desc = "Automatically picks up the pole in Sky Squid Game",
+    Value = false,
+    Callback = function(state)
+        autoPickupPoleEnabled = state
+        if state then
+            -- Start auto pickup loop
+            autoPickupPoleConnection = task.spawn(function()
+                while autoPickupPoleEnabled do
+                    AutoPickupPole()
+                    task.wait(1) -- Check every second
+                end
+            end)
+            
+            -- Also monitor game changes
+            local currentGame = workspace.Values.CurrentGame
+            if currentGame then
+                currentGame.Changed:Connect(function()
+                    if autoPickupPoleEnabled then
+                        task.wait(2) -- Wait a bit for the game to load
+                        AutoPickupPole()
+                    end
+                end)
+            end
+        else
+            if autoPickupPoleConnection then
+                task.cancel(autoPickupPoleConnection)
+                autoPickupPoleConnection = nil
             end
         end
     end
