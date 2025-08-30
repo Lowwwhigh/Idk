@@ -363,7 +363,11 @@ function cleanupAllFeatures()
 end
 
 -- Auto-cleanup when leaving game
-game:BindToClose(cleanupAllFeatures)
+game.Players.LocalPlayer.AncestryChanged:Connect(function()
+    if not game.Players.LocalPlayer.Parent then
+        cleanupAllFeatures()
+    end
+end)
 
 
 local aimbotLerpFactor = 0.3
