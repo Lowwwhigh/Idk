@@ -14,361 +14,6 @@ local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
 
--- Global optimization variables
-local updateInterval = 0.1 -- Limit updates to 10fps instead of 60fps
-local lastUpdate = 0
-
--- Connection storage for proper cleanup
-local connections = {}
-
--- Utility function for throttled updates
-local function shouldUpdate()
-    local currentTime = tick()
-    if currentTime - lastUpdate >= updateInterval then
-        lastUpdate = currentTime
-        return true
-    end
-    return false
-end
-
--- Utility function to safely disconnect connections
-local function cleanupConnections(feature)
-    if connections[feature] then
-        for _, conn in pairs(connections[feature]) do
-            if conn and conn.Disconnect then
-                conn:Disconnect()
-            end
-        end
-        connections[feature] = nil
-    end
-end
-
--- 1. OPTIMIZED FLING AURA
-local flingAuraEnabled = false
-
-local function startFlingAura()
-    if connections.flingAura then return end -- Prevent duplicates
-    
-    connections.flingAura = {}
-    
-    local function applyFling()
-        if not flingAuraEnabled then return end
-        if not shouldUpdate() then return end -- Throttle updates
-        
-        local character = LocalPlayer.Character
-        if not character then return end
-        
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        
-        -- Less aggressive fling that won't crash the game
-        local currentVel = hrp.Velocity
-        hrp.Velocity = Vector3.new(
-            currentVel.X * 1.5, 
-            math.max(currentVel.Y, 50), -- Prevent excessive Y velocity
-            currentVel.Z * 1.5
-        )
-        
-        -- Small delay to prevent overwhelming the physics engine
-        task.wait(0.05)
-        hrp.Velocity = currentVel
-    end
-    
-    -- Use Stepped instead of RenderStepped for better performance
-    connections.flingAura[1] = RunService.Stepped:Connect(applyFling)
-    
-    -- Respawn handler
-    connections.flingAura[2] = LocalPlayer.CharacterAdded:Connect(function()
-        task.wait(1) -- Wait for character to load
-        if flingAuraEnabled then
-            startFlingAura()
-        end
-    end)
-end
-
-function toggleFlingAura(state)
-    flingAuraEnabled = state
-    if state then
-        startFlingAura()
-    else
-        cleanupConnections("flingAura")
-    end
-end
-
--- 2. OPTIMIZED ANTI-FLING
-local antiFlingEnabled = false
-
-local function startAntiFling()
-    if connections.antiFling then return end
-    
-    connections.antiFling = {}
-    
-    local function preventFling()
-        if not antiFlingEnabled then return end
-        if not shouldUpdate() then return end
-        
-        local character = LocalPlayer.Character
-        if not character then return end
-        
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if not hrp then return end
-        
-        local velocity = hrp.Velocity
-        local maxVelocity = 100 -- Reasonable speed limit
-        
-        -- Only apply correction if velocity is excessive
-        if velocity.Magnitude > maxVelocity then
-            hrp.Velocity = Vector3.new(
-                math.clamp(velocity.X, -maxVelocity, maxVelocity),
-                velocity.Y, -- Don't interfere with jumping
-                math.clamp(velocity.Z, -maxVelocity, maxVelocity)
-            )
-            hrp.RotVelocity = Vector3.new(0, 0, 0)
-        end
-    end
-    
-    connections.antiFling[1] = RunService.Stepped:Connect(preventFling)
-    
-    connections.antiFling[2] = LocalPlayer.CharacterAdded:Connect(function()
-        task.wait(1)
-        if antiFlingEnabled then
-            startAntiFling()
-        end
-    end)
-end
-
-function toggleAntiFling(state)
-    antiFlingEnabled = state
-    if state then
-        startAntiFling()
-    else
-        cleanupConnections("antiFling")
-    end
-end
-
--- 3. OPTIMIZED FACE NEAREST PLAYER
-local facePlayerEnabled = false
-
-local function startFacePlayer()
-    if connections.facePlayer then return end
-    
-    connections.facePlayer = {}
-    
-    local function faceClosest()
-        if not facePlayerEnabled then return end
-        if not shouldUpdate() then return end
-        
-        local myCharacter = LocalPlayer.Character
-        if not myCharacter then return end
-        
-        local myHrp = myCharacter:FindFirstChild("HumanoidRootPart")
-        if not myHrp then return end
-        
-        local closestPlayer = nil
-        local closestDistance = math.huge
-        
-        -- Find closest player (optimized search)
-        for _, player in ipairs(Players:GetPlayers()) do
-            if player == LocalPlayer then continue end
-            if not player.Character then continue end
-            
-            local theirHrp = player.Character:FindFirstChild("HumanoidRootPart")
-            if not theirHrp then continue end
-            
-            local distance = (myHrp.Position - theirHrp.Position).Magnitude
-            if distance < closestDistance and distance < 100 then -- Range limit
-                closestDistance = distance
-                closestPlayer = player
-            end
-        end
-        
-        -- Face the closest player
-        if closestPlayer and closestPlayer.Character then
-            local targetHrp = closestPlayer.Character:FindFirstChild("HumanoidRootPart")
-            if targetHrp then
-                local lookVector = (targetHrp.Position - myHrp.Position).Unit
-                myHrp.CFrame = CFrame.lookAt(myHrp.Position, myHrp.Position + Vector3.new(lookVector.X, 0, lookVector.Z))
-            end
-        end
-    end
-    
-    connections.facePlayer[1] = RunService.Stepped:Connect(faceClosest)
-    
-    connections.facePlayer[2] = LocalPlayer.CharacterAdded:Connect(function()
-        task.wait(1)
-        if facePlayerEnabled then
-            startFacePlayer()
-        end
-    end)
-end
-
-function toggleFacePlayer(state)
-    facePlayerEnabled = state
-    if state then
-        startFacePlayer()
-    else
-        cleanupConnections("facePlayer")
-    end
-end
-
--- 4. OPTIMIZED NOCLIP
-local noclipEnabled = false
-
-local function startNoclip()
-    if connections.noclip then return end
-    
-    connections.noclip = {}
-    
-    local function applyNoclip()
-        if not noclipEnabled then return end
-        
-        local character = LocalPlayer.Character
-        if not character then return end
-        
-        -- Only process parts that are currently solid
-        for _, part in pairs(character:GetDescendants()) do
-            if part:IsA("BasePart") and part.CanCollide then
-                part.CanCollide = false
-            end
-        end
-    end
-    
-    -- Use a slower update rate for noclip since it doesn't need frequent updates
-    connections.noclip[1] = RunService.Heartbeat:Connect(function()
-        if tick() % 0.2 < 0.016 then -- Update every 0.2 seconds
-            applyNoclip()
-        end
-    end)
-    
-    connections.noclip[2] = LocalPlayer.CharacterAdded:Connect(function(character)
-        task.wait(1)
-        if noclipEnabled then
-            -- Setup noclip for new character parts
-            character.ChildAdded:Connect(function(child)
-                if noclipEnabled and child:IsA("BasePart") then
-                    child.CanCollide = false
-                end
-            end)
-            applyNoclip()
-        end
-    end)
-end
-
-function toggleNoclip(state)
-    noclipEnabled = state
-    if state then
-        startNoclip()
-    else
-        cleanupConnections("noclip")
-        -- Restore collision
-        local character = LocalPlayer.Character
-        if character then
-            for _, part in pairs(character:GetDescendants()) do
-                if part:IsA("BasePart") and part.Name ~= "HumanoidRootPart" then
-                    part.CanCollide = true
-                end
-            end
-        end
-    end
-end
-
--- 5. OPTIMIZED ANTI-RAGDOLL
-local antiRagdollEnabled = false
-
-local function startAntiRagdoll()
-    if connections.antiRagdoll then return end
-    
-    connections.antiRagdoll = {}
-    
-    local function removeRagdollEffects(character)
-        if not character then return end
-        
-        -- Remove ragdoll-related objects
-        local ragdollItems = {"Ragdoll", "Stun", "RotateDisabled", "RagdollWakeupImmunity", "InjuredWalking"}
-        
-        for _, itemName in ipairs(ragdollItems) do
-            local item = character:FindFirstChild(itemName)
-            if item then
-                item:Destroy()
-            end
-        end
-        
-        -- Fix humanoid state
-        local humanoid = character:FindFirstChildOfClass("Humanoid")
-        if humanoid then
-            humanoid.PlatformStand = false
-            if humanoid:GetState() == Enum.HumanoidStateType.Physics then
-                humanoid:ChangeState(Enum.HumanoidStateType.Running)
-            end
-        end
-        
-        -- Clean up constraints that cause ragdolling
-        local hrp = character:FindFirstChild("HumanoidRootPart")
-        if hrp then
-            for _, obj in pairs(hrp:GetChildren()) do
-                if obj:IsA("BallSocketConstraint") then
-                    obj:Destroy()
-                end
-            end
-        end
-    end
-    
-    local function monitorRagdoll()
-        local character = LocalPlayer.Character
-        if not character then return end
-        
-        removeRagdollEffects(character)
-        
-        -- Monitor for new ragdoll effects (less frequent checking)
-        if not connections.antiRagdoll[character] then
-            connections.antiRagdoll[character] = character.ChildAdded:Connect(function(child)
-                if child.Name == "Ragdoll" then
-                    task.wait(0.1) -- Small delay to let the ragdoll setup
-                    removeRagdollEffects(character)
-                end
-            end)
-        end
-    end
-    
-    -- Check less frequently than other systems
-    connections.antiRagdoll[1] = RunService.Heartbeat:Connect(function()
-        if antiRagdollEnabled and tick() % 0.3 < 0.016 then -- Every 0.3 seconds
-            monitorRagdoll()
-        end
-    end)
-    
-    connections.antiRagdoll[2] = LocalPlayer.CharacterAdded:Connect(function(character)
-        task.wait(1)
-        if antiRagdollEnabled then
-            monitorRagdoll()
-        end
-    end)
-end
-
-function toggleAntiRagdoll(state)
-    antiRagdollEnabled = state
-    if state then
-        startAntiRagdoll()
-    else
-        cleanupConnections("antiRagdoll")
-    end
-end
-
--- MASTER CLEANUP FUNCTION
-function cleanupAllFeatures()
-    local features = {"flingAura", "antiFling", "facePlayer", "noclip", "antiRagdoll"}
-    for _, feature in ipairs(features) do
-        cleanupConnections(feature)
-    end
-end
-
--- Auto-cleanup when leaving game
-game.Players.LocalPlayer.AncestryChanged:Connect(function()
-    if not game.Players.LocalPlayer.Parent then
-        cleanupAllFeatures()
-    end
-end)
-
 
 local aimbotLerpFactor = 0.3
 local glassESPEnabled = false
@@ -721,7 +366,6 @@ local function StartFly()
     StartFlyLoop()
 end
 
-
 Discord:Paragraph({
     Title = "Join Discord To Know Updates!",
     Desc = "Stay updated with the latest features and fixes",
@@ -749,22 +393,193 @@ Discord:Paragraph({
 Main:Section({Title = "OP"})
 Main:Divider()
 
+Main:Button({
+    Title = "Anti Lag",
+    Desc = "Temporarily moves camera and freezes player to reduce lag",
+    Callback = function()
+        -- Store original values
+        local originalCameraCFrame = Camera.CFrame
+        local originalCameraType = Camera.CameraType
+        local originalHumanoidState
+        
+        -- Freeze player movement
+        local character = LocalPlayer.Character
+        if character then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                originalHumanoidState = humanoid:GetState()
+                humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+            end
+        end
+        
+        -- Move camera to random position
+        local randomOffset = Vector3.new(
+            math.random(-50, 50),
+            math.random(10, 30),
+            math.random(-50, 50)
+        )
+        local randomCameraCFrame = CFrame.new(Camera.CFrame.Position + randomOffset)
+        Camera.CameraType = Enum.CameraType.Scriptable
+        Camera.CFrame = randomCameraCFrame
+        
+        -- Notify user
+        WindUI:Notify({
+            Title = "Anti Lag",
+            Content = "Reducing lag for 3 seconds...",
+            Duration = 3
+        })
+        
+        -- Wait for 3 seconds
+        task.wait(3)
+        
+        -- Restore original camera position and settings
+        Camera.CFrame = originalCameraCFrame
+        Camera.CameraType = originalCameraType
+        
+        -- Restore player movement
+        if character then
+            local humanoid = character:FindFirstChildOfClass("Humanoid")
+            if humanoid then
+                humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                task.wait(0.5)
+                if originalHumanoidState then
+                    humanoid:ChangeState(originalHumanoidState)
+                else
+                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                end
+            end
+        end
+        
+        -- Final notification
+        WindUI:Notify({
+            Title = "Anti Lag",
+            Content = "Lag reduction complete!",
+            Duration = 2
+        })
+    end
+})
+
+local touchFlingEnabled = false
+local touchFlingConnection = nil
+local touchFlingAntiCheatHook = nil
+
 Main:Toggle({
     Title = "Fling Aura",
     Desc = "Fling other players when they touch you",
     Value = false,
     Callback = function(state)
-        toggleFlingAura(state)
+        touchFlingEnabled = state
+        if state then
+            -- Initialize
+            local function FlingPlayer()
+                local Players = game:GetService("Players")
+                local LocalPlayer = Players.LocalPlayer
+                local Character = LocalPlayer.Character
+                local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
+                local RunService = game:GetService("RunService")
+
+                if not HumanoidRootPart then return end
+
+                -- Disable anti-fling checks (if any)
+                local velocityConnections = getconnections(HumanoidRootPart:GetPropertyChangedSignal("Velocity"))
+                for _, connection in ipairs(velocityConnections) do
+                    connection:Disable()
+                end
+
+                -- Main fling logic
+                local flingActive = true
+                local flingConnection = RunService.RenderStepped:Connect(function()
+                    if not flingActive or not HumanoidRootPart or not HumanoidRootPart.Parent then
+                        flingConnection:Disconnect()
+                        return
+                    end
+
+                    -- Apply fling force
+                    local currentVelocity = HumanoidRootPart.Velocity
+                    HumanoidRootPart.Velocity = currentVelocity * 1000 + Vector3.new(0, 10000, 0)
+                    
+                    -- Stabilize after initial fling
+                    RunService.RenderStepped:Wait()
+                    if HumanoidRootPart.Parent then
+                        HumanoidRootPart.Velocity = currentVelocity
+                    end
+
+                    -- Small vertical nudge to maintain fling
+                    RunService.Stepped:Wait()
+                    if HumanoidRootPart.Parent then
+                        local nudgeDirection = ((math.floor(tick()) % 2 == 0) and 1 or -1)
+                        HumanoidRootPart.Velocity = currentVelocity + Vector3.new(0, 0.1 * nudgeDirection, 0)
+                    end
+                end)
+
+                -- Cleanup function
+                return function()
+                    flingActive = false
+                    if flingConnection then flingConnection:Disconnect() end
+                    for _, connection in ipairs(velocityConnections) do
+                        connection:Enable() -- Re-enable anti-cheat checks
+                    end
+                end
+            end
+
+            touchFlingConnection = FlingPlayer()
+            
+            -- Reinitialize on respawn
+            LocalPlayer.CharacterAdded:Connect(function()
+                if touchFlingEnabled then
+                    if touchFlingConnection then
+                        touchFlingConnection()
+                    end
+                    touchFlingConnection = FlingPlayer()
+                end
+            end)
+        else
+            -- Cleanup
+            if touchFlingConnection then
+                touchFlingConnection()
+                touchFlingConnection = nil
+            end
+        end
     end
 })
 
 
+local antiFlingEnabled = false
+local antiFlingConnection
 Main:Toggle({
     Title = "Anti-Fling",
     Desc = "Stops other players from flinging you",
     Value = false,
     Callback = function(state)
-        toggleAntiFling(state)
+        antiFlingEnabled = state
+        if state then
+            antiFlingConnection = RunService.RenderStepped:Connect(function()
+                pcall(function()
+                    local character = LocalPlayer.Character
+                    if character then
+                        local hrp = character:FindFirstChild("HumanoidRootPart")
+                        local humanoid = character:FindFirstChildOfClass("Humanoid")
+                        
+                        if hrp and humanoid then
+                            
+                            local currentVel = hrp.Velocity
+                            hrp.Velocity = Vector3.new(currentVel.X * 0.5, currentVel.Y, currentVel.Z * 0.5)
+                            hrp.RotVelocity = Vector3.new(0, 0, 0)
+                            
+                            
+                            if currentVel.Magnitude > 100 and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping then
+                                hrp.Velocity = Vector3.new(currentVel.X * 0.3, currentVel.Y, currentVel.Z * 0.3)
+                            end
+                        end
+                    end
+                end)
+            end)
+        else
+            if antiFlingConnection then
+                antiFlingConnection:Disconnect()
+                antiFlingConnection = nil
+            end
+        end
     end
 })
 
@@ -2016,12 +1831,92 @@ Combat:Toggle({
 Combat:Section({Title = "Face"})
 Combat:Divider()
 
+local aimbotEnabled = false
+local aimbotConnection = nil
+local lastTarget = nil
+
 Combat:Toggle({
     Title = "Face Nearest Player",
     Desc = "Automatically faces the closest player",
     Value = false,
     Callback = function(state)
-        toggleFacePlayer(state)
+        aimbotEnabled = state
+        if state then
+            -- Initialize aimbot
+            local function FaceClosestPlayer()
+                local Players = game:GetService("Players")
+                local LocalPlayer = Players.LocalPlayer
+                local RunService = game:GetService("RunService")
+                local connection
+                
+                local function getClosestPlayer()
+                    local closestPlayer, closestDistance = nil, math.huge
+                    local myPosition = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and LocalPlayer.Character.HumanoidRootPart.Position
+
+                    if not myPosition then return nil end
+
+                    for _, player in ipairs(Players:GetPlayers()) do
+                        if player ~= LocalPlayer and player.Character then
+                            local hrp = player.Character:FindFirstChild("HumanoidRootPart")
+                            if hrp and hrp.Parent and player.Character.Humanoid.Health > 0 then
+                                local distance = (myPosition - hrp.Position).Magnitude
+                                if distance < closestDistance then
+                                    closestDistance = distance
+                                    closestPlayer = player
+                                end
+                            end
+                        end
+                    end
+                    return closestPlayer
+                end
+
+                connection = RunService.RenderStepped:Connect(function()
+                    local target = getClosestPlayer()
+                    if target and target.Character then
+                        local targetHrp = target.Character:FindFirstChild("HumanoidRootPart")
+                        local myHrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                        
+                        if targetHrp and myHrp then
+                            -- Face target while maintaining original Y position (horizontal only)
+                            local newCF = CFrame.new(myHrp.Position, Vector3.new(
+                                targetHrp.Position.X,
+                                myHrp.Position.Y,
+                                targetHrp.Position.Z
+                            ))
+                            myHrp.CFrame = newCF
+                            lastTarget = target
+                        end
+                    end
+                end)
+
+                -- Cleanup function
+                return function()
+                    if connection then
+                        connection:Disconnect()
+                    end
+                end
+            end
+
+            aimbotConnection = FaceClosestPlayer()
+            
+            -- Reinitialize when character respawns
+            game.Players.LocalPlayer.CharacterAdded:Connect(function()
+                task.wait(1) -- Wait for character to fully load
+                if aimbotEnabled then
+                    if aimbotConnection then
+                        aimbotConnection()
+                    end
+                    aimbotConnection = FaceClosestPlayer()
+                end
+            end)
+        else
+            -- Cleanup
+            if aimbotConnection then
+                aimbotConnection()
+                aimbotConnection = nil
+            end
+            lastTarget = nil
+        end
     end
 })
 
@@ -2918,12 +2813,94 @@ Misc:Toggle({
     end
 })
 
+
+local antiRagdollEnabled = false
+local antiRagdollConnections = {}
+
+local function BypassRagdoll()
+    local character = LocalPlayer.Character
+    if not character then return end
+
+    
+    for _, child in ipairs(character:GetChildren()) do
+        if child.Name == "Ragdoll" then
+            child:Destroy()
+        elseif table.find({"Stun", "RotateDisabled", "RagdollWakeupImmunity", "InjuredWalking"}, child.Name) then
+            child:Destroy()
+        end
+    end
+
+    
+    if antiRagdollConnections[character] then
+        antiRagdollConnections[character]:Disconnect()
+    end
+    
+    antiRagdollConnections[character] = character.ChildAdded:Connect(function(child)
+        if child.Name == "Ragdoll" then
+            task.spawn(function()
+                child:Destroy()
+                local humanoid = character:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.PlatformStand = false
+                    humanoid:ChangeState(Enum.HumanoidStateType.GettingUp)
+                end
+            end)
+        elseif table.find({"Stun", "RotateDisabled"}, child.Name) then
+            task.spawn(function() child:Destroy() end)
+        end
+    end)
+
+    
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        for _, obj in ipairs(humanoidRootPart:GetChildren()) do
+            if obj:IsA("BallSocketConstraint") or obj.Name:match("^CacheAttachment") then
+                obj:Destroy()
+            end
+        end
+    end
+
+    
+    local torso = character:FindFirstChild("Torso") or character:FindFirstChild("UpperTorso")
+    if torso then
+        for _, jointName in ipairs({"Left Hip", "Left Shoulder", "Neck", "Right Hip", "Right Shoulder"}) do
+            local motor = torso:FindFirstChild(jointName)
+            if motor and motor:IsA("Motor6D") and not motor.Part0 then
+                motor.Part0 = torso
+            end
+        end
+    end
+
+    
+    for _, part in ipairs(character:GetDescendants()) do
+        if part:IsA("BasePart") and part:FindFirstChild("BoneCustom") then
+            part.BoneCustom:Destroy()
+        end
+    end
+end
+
 Misc:Toggle({
     Title = "Anti Ragdoll",
     Desc = "Prevents ragdoll effects and stuns",
     Value = false,
     Callback = function(state)
-        toggleAntiRagdoll(state)
+        antiRagdollEnabled = state
+        if state then
+            
+            BypassRagdoll()
+            
+            
+            antiRagdollConnections.charAdded = LocalPlayer.CharacterAdded:Connect(function(character)
+                task.wait(0.5) 
+                BypassRagdoll()
+            end)
+        else
+            
+            for _, conn in pairs(antiRagdollConnections) do
+                if conn then conn:Disconnect() end
+            end
+            antiRagdollConnections = {}
+        end
     end
 })
 
@@ -3010,12 +2987,52 @@ LocalPlayer.CharacterAdded:Connect(function(character)
 end)
 
 
+local noclipEnabled = false
+local noclipConnection
+
+local function noclipLoop()
+    if noclipEnabled and LocalPlayer.Character then
+        for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+            if part:IsA("BasePart") and part.CanCollide then
+                part.CanCollide = false
+            end
+        end
+    end
+end
+
 Misc:Toggle({
     Title = "NoClip",
     Desc = "Walk through walls and objects",
     Value = false,
     Callback = function(state)
-        toggleNoclip(state)
+        noclipEnabled = state
+        if state then
+            
+            noclipConnection = RunService.Stepped:Connect(noclipLoop)
+            
+            
+            LocalPlayer.CharacterAdded:Connect(function(char)
+                task.wait(0.5) 
+                if noclipEnabled then
+                    noclipLoop()
+                end
+            end)
+        else
+            
+            if noclipConnection then
+                noclipConnection:Disconnect()
+                noclipConnection = nil
+            end
+            
+            
+            if LocalPlayer.Character then
+                for _, part in pairs(LocalPlayer.Character:GetDescendants()) do
+                    if part:IsA("BasePart") then
+                        part.CanCollide = true
+                    end
+                end
+            end
+        end
     end
 })
 
