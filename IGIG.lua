@@ -998,11 +998,11 @@ Main:Button({
             collision:Destroy()
         end
         
-        -- Create anti-fall part
+        -- Create anti-fall part with the correct position
         local antiFallPart = Instance.new("Part")
         antiFallPart.Name = "AntiFallPart"
         antiFallPart.Size = Vector3.new(1000, 5, 1000)
-        antiFallPart.Position = Vector3.new(681.638062, 196.204407 + 682, 920.777466)
+        antiFallPart.Position = Vector3.new(647.316162109375, 192.54104614257812, 924.5520629882812)
         antiFallPart.Anchored = true
         antiFallPart.CanCollide = true
         antiFallPart.Transparency = 0
