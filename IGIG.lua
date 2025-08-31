@@ -1226,107 +1226,29 @@ Main:Keybind({
 Main:Section({Title = "Tug of War"})
 Main:Divider()
 
-local autoPullEnabled = false
-local autoPullCleanup
-local autoPullMode = "Blatant" 
+local tugOfWarAutoEnabled = false
+local tugOfWarConnection = nil
 
-function AutoPullRope()
-    if autoPullMode == "Blatant" then
-        local ReplicatedStorage = game:GetService("ReplicatedStorage")
-        local Remotes = ReplicatedStorage:WaitForChild("Remotes")
-        local TugOfWarRemote = Remotes:WaitForChild("TemporaryReachedBindable")
-        
-        WindUI:Notify({
-            Title = "Auto Pull Rope",
-            Content = "Pulling Rope Automatically You will see the percentage fly for your team you will carry",
-            Duration = 5,
-        })
-
-        local connection
-        local function pull()
-            TugOfWarRemote:FireServer({GameQTE = true})
-        end
-
-        connection = RunService.RenderStepped:Connect(pull)
-        
-        return function()
-            if connection then
-                connection:Disconnect()
-                connection = nil
-            end
-        end
-    else
-        -- Legit mode using direct input simulation instead of VirtualInputManager
-        local connection
-        local lastClickTime = 0
-        local clickCooldown = 0.1 
-        
-        local function checkAndPull()
-            -- Check if we're in a QTE event
-            local playerGui = game:GetService("Players").LocalPlayer.PlayerGui
-            local qteEvents = playerGui:WaitForChild("QTEEvents")
-            if not qteEvents then return end
-            
-            local progress = qteEvents:FindFirstChild("Progress")
-            if not progress then return end
-            
-            -- Check if crosshair is near goal
-            local crossHair = progress:FindFirstChild("CrossHair")
-            local goalDot = progress:FindFirstChild("GoalDot")
-            if not crossHair or not goalDot then return end
-            
-            -- Calculate angle difference
-            local angleDiff = math.abs((crossHair.Rotation - goalDot.Rotation + 180) % 360 - 180)
-            
-            -- If within acceptable range, simulate space press
-            if angleDiff <= 26 then 
-                local currentTime = tick()
-                if currentTime - lastClickTime >= clickCooldown then
-                    -- Directly fire the remote instead of using VirtualInputManager
-                    game:GetService("ReplicatedStorage").Remotes.TemporaryReachedBindable:FireServer({GameQTE = true})
-                    lastClickTime = currentTime
-                end
-            end
-        end
-
-        connection = RunService.RenderStepped:Connect(checkAndPull)
-        
-        return function()
-            if connection then
-                connection:Disconnect()
-                connection = nil
-            end
-        end
-    end
-end
-
-Main:Dropdown({
-    Title = "Pull Mode",
-    Values = {"Blatant", "Legit [Same as Blatant But Legit]"},
-    Default = "Blatant",
-    Callback = function(selected)
-        autoPullMode = selected
-        if autoPullEnabled and autoPullCleanup then
-            autoPullCleanup()
-            autoPullCleanup = AutoPullRope()
-        end
-    end
-})
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local RunService = game:GetService("RunService")
+local Pull = ReplicatedStorage.Remotes:WaitForChild("TemporaryReachedBindable")
+local VALID_PULL_DATA = { { IHateYou = true } }
 
 Main:Toggle({
     Title = "Auto Pull Rope",
-    Desc = "Automatically pulls the rope with perfect timing",
+    Desc = "Automatically pulls the rope",
     Value = false,
     Callback = function(state)
-        autoPullEnabled = state
+        tugOfWarAutoEnabled = state
         if state then
-            autoPullCleanup = AutoPullRope()
+            if tugOfWarConnection then return end
+            tugOfWarConnection = RunService.Heartbeat:Connect(function()
+                Pull:FireServer(VALID_PULL_DATA)
+            end)
         else
-            if autoPullCleanup then
-                if type(autoPullCleanup) == "function" then
-                    autoPullCleanup()
-                end
-                autoPullCleanup = nil
+            if tugOfWarConnection then
+                tugOfWarConnection:Disconnect()
+                tugOfWarConnection = nil
             end
         end
     end
