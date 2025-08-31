@@ -101,7 +101,7 @@ local UL = MainSection:Tab({
 
 UL:Paragraph({
     Title = "CHANGELOGS V7",
-    Desc = "[-] Deleted Features That Activates Anti-Cheat\n[~] Fixed Fly Banning you\n[+] Added Sky Squid Game Features\n[+] Added Anti spike Hide and Seek",
+    Desc = "[-] Deleted Features That Activates Anti-Cheat\n[~] Fixed Fly Banning you\n[+] Added Sky Squid Game Features\n[+] Added Anti spike Hide and Seek\n[+] Added Auto collect Bandage\n[+] Added Anti Banana",
     Image = "rbxassetid://130506306640152",
 })
 
@@ -394,7 +394,7 @@ local function StartFly()
     
     enabled = true
     FLYING = true
-    speed = flySpeed * 50
+    speed = flySpeed
     InitializeFly()
     StartFlyLoop()
 end
@@ -879,22 +879,15 @@ Main:Toggle({
 Main:Section({Title = "Dalgona"})
 Main:Divider()
 
--- Replace the existing Complete Dalgona button with this toggle
 local completeDalgonaEnabled = false
 local dalgonaHooked = false
+local dalgonaConnection = nil
 
 local function CompleteDalgona()
     if not completeDalgonaEnabled then return end
 
     local DalgonaClientModule = game.ReplicatedStorage.Modules.Games.DalgonaClient
     if not DalgonaClientModule then return end
-
-    -- Notify once (no spam)
-    WindUI:Notify({
-        Title = "Complete Dalgona",
-        Content = "If it doesnt work your executor is bad",
-        Duration = 5
-    })
 
     -- Find and modify the Dalgona progress function
     for _, func in ipairs(getgc()) do
@@ -908,10 +901,9 @@ local function CompleteDalgona()
     end
 end
 
--- Track game changes without RunService spam
+-- Track game changes
 local currentGame = workspace:FindFirstChild("Values") and workspace.Values:FindFirstChild("CurrentGame")
 if not currentGame then return end
-local dalgonaConnection
 
 local function OnGameChanged(newGame)
     if newGame == "Dalgona" and completeDalgonaEnabled then
@@ -927,11 +919,33 @@ Main:Toggle({
     Value = false,
     Callback = function(state)
         completeDalgonaEnabled = state
+        
+        -- Show notification only when toggled on
+        if state then
+            WindUI:Notify({
+                Title = "Complete Dalgona",
+                Content = "If it doesn't work your executor is bad",
+                Duration = 5
+            })
+        end
+        
         if state then
             -- Set up a one-time connection to track game changes
             if not dalgonaConnection then
                 dalgonaConnection = currentGame.Changed:Connect(OnGameChanged)
             end
+            
+            -- Start completion loop
+            task.spawn(function()
+                while completeDalgonaEnabled do
+                    -- Check if we're in Dalgona game
+                    if currentGame.Value == "Dalgona" then
+                        CompleteDalgona()
+                    end
+                    task.wait(1) -- Check every second
+                end
+            end)
+            
             -- Check immediately if already in Dalgona
             if currentGame.Value == "Dalgona" then
                 CompleteDalgona()
@@ -969,20 +983,13 @@ Main:Button({
 })
 
 Main:Button({
-    Title = "Freeze Rope",
-    Desc = "Freezes the rope",
+    Title = "Delete Rope",
+    Desc = "Deletes the rope and creates a platform",
     Callback = function()
-        -- Freeze everything in rope (no BasePart check)
-        local rope = workspace.Effects:FindFirstChild("ropetesting")
+        -- Delete the rope
+        local rope = workspace.Effects:WaitForChild("rope")
         if rope then
-            for _, child in ipairs(rope:GetDescendants()) do
-                pcall(function()
-                    child.Anchored = true
-                    child.CanCollide = false
-                    child.Velocity = Vector3.new(0, 0, 0)
-                    child.RotVelocity = Vector3.new(0, 0, 0)
-                end)
-            end
+            rope:Destroy()
         end
         
         -- Remove collision
@@ -990,6 +997,24 @@ Main:Button({
         if collision then
             collision:Destroy()
         end
+        
+        -- Create anti-fall part
+        local antiFallPart = Instance.new("Part")
+        antiFallPart.Name = "AntiFallPart"
+        antiFallPart.Size = Vector3.new(1000, 5, 1000)
+        antiFallPart.Position = Vector3.new(681.638062, 196.204407 + 682, 920.777466)
+        antiFallPart.Anchored = true
+        antiFallPart.CanCollide = true
+        antiFallPart.Transparency = 0
+        antiFallPart.Color = Color3.fromRGB(128, 128, 128)
+        antiFallPart.Material = Enum.Material.Concrete
+        antiFallPart.Parent = workspace
+        
+        WindUI:Notify({
+            Title = "Delete Rope",
+            Content = "Rope deleted and platform created",
+            Duration = 3
+        })
     end
 })
 Main:Section({Title = "Hide and Seek"})
