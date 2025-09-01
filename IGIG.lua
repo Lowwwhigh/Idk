@@ -659,19 +659,19 @@ Main:Toggle({
                 local DalgonaClientModule = game.ReplicatedStorage.Modules.Games.DalgonaClient
                 if not DalgonaClientModule then return end
                 
-                -- Find and modify the Dalgona progress function
+                -- Find the RenderStepped function with the progress variables
                 for _, func in ipairs(getgc()) do
                     if typeof(func) == "function" and islclosure(func) and getfenv(func).script == DalgonaClientModule then
-                        if debug.getinfo(func).nups >= 70 then -- Look for the main function with many upvalues
-                            -- Set progress to almost complete
-                            for i = 1, debug.getinfo(func).nups do
+                        local info = debug.getinfo(func)
+                        if info.nups > 50 then -- The main RenderStepped function
+                            -- Find v_u_107 (progress counter) and set it to complete
+                            for i = 1, info.nups do
                                 local name, value = debug.getupvalue(func, i)
                                 if typeof(value) == "number" and value >= 0 and value < 200 then
-                                    -- Find the total count
-                                    for j = 1, debug.getinfo(func).nups do
+                                    -- Find v_u_106 (total required)
+                                    for j = 1, info.nups do
                                         local name2, value2 = debug.getupvalue(func, j)
                                         if typeof(value2) == "number" and value2 > value and value2 < 500 then
-                                            -- Set progress to almost complete
                                             debug.setupvalue(func, i, value2 - 5)
                                             dalgonaHooked = true
                                             return true
@@ -679,6 +679,7 @@ Main:Toggle({
                                     end
                                 end
                             end
+                            break
                         end
                     end
                 end
