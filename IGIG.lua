@@ -108,6 +108,12 @@ local Main = GameSection:Tab({
     ShowTabTitle = true,
 })
 
+local Peabert = GameSection:Tab({
+    Title = "Peabert",
+    Icon = "gift",
+    ShowTabTitle = true,
+})
+
 local Utility = GameSection:Tab({
     Title = "Utility",
     Icon = "settings",
@@ -1960,7 +1966,7 @@ Utility:Button({
 local phantomDashEnabled = false
 local phantomDashCleanup = nil
 
-Main:Toggle({
+Utility:Toggle({
     Title = "No Cooldown Phantom Step",
     Desc = "Removes cooldown from Phantom Step dash ability",
     Value = false,
@@ -1983,7 +1989,6 @@ Main:Toggle({
                 -- Main handler
                 dashCooldownConnection = character.ChildAdded:Connect(function(child)
                     if child.Name == "CDDASHSTACKSCD" then
-                        task.wait(0.1) -- Small delay to avoid race conditions
                         removeCooldown()
                     end
                 end)
@@ -2003,7 +2008,6 @@ Main:Toggle({
             
             -- Reapply on respawn
             game.Players.LocalPlayer.CharacterAdded:Connect(function()
-                task.wait(1) -- Wait for character to fully load
                 if phantomDashEnabled then
                     if phantomDashCleanup then
                         phantomDashCleanup()
@@ -2463,6 +2467,384 @@ LocalPlayer.CharacterAdded:Connect(function(character)
         end
     end
 end)
+
+-- Add to the Misc section after the existing code
+Misc:Section({Title = "Flight"})
+Misc:Divider()
+
+local flySpeed = 50
+local flyEnabled = false
+
+Misc:Slider({
+    Title = "Fly Speed",
+    Desc = "Adjust flight speed",
+    Value = {
+        Min = 50,
+        Max = 200,
+        Default = 50,
+    },
+    Callback = function(value)
+        flySpeed = value
+    end
+})
+
+Misc:Toggle({
+    Title = "Fly",
+    Desc = "Enable flight mode",
+    Value = false,
+    Callback = function(state)
+        flyEnabled = state
+        
+        if state then
+            -- Initialize fly system
+            local UIS = game:GetService("UserInputService")
+            local RS = game:GetService("RunService")
+            local Players = game:GetService("Players")
+            local Workspace = game:GetService("Workspace")
+            local player = Players.LocalPlayer
+
+            local flyConnection = nil
+            local antiFallConnection = nil
+            local speed = flySpeed
+            local inputVector = Vector3.zero
+            local currentVelocity = Vector3.zero
+            local lerpSpeed = 35
+            local ySpeed = flySpeed
+            local currentYVelocity = 0
+
+            local rotationLerpSpeed = 12
+            local decelerationMultiplier = 1.8
+
+            local joystickTouch = nil
+            local joystickStartPos = nil
+            local keysPressed = {}
+
+            local camera = workspace.CurrentCamera
+
+            local lastPosition = Vector3.zero
+            local velocityHistory = {}
+            local frameCount = 0
+            local ref = cloneref or function(x) return x end
+            local S = function(n) return ref(game:GetService(n)) end
+
+            local Plrs, UIS, RS, Wk = S("Players"), S("UserInputService"), S("RunService"), S("Workspace")
+            local plr = Plrs.LocalPlayer
+
+            local function getParts()
+                local c = plr.Character or plr.CharacterAdded:Wait()
+                local hum, hrp
+                for _, d in ipairs(c:GetDescendants()) do
+                    if not hum and d:IsA("Humanoid") then hum = d end
+                    if not hrp and d:IsA("BasePart") and d.Name == "HumanoidRootPart" then hrp = d end
+                    if hum and hrp then break end
+                end
+                hum = hum or c:WaitForChild("Humanoid")
+                hrp = hrp or c:WaitForChild("HumanoidRootPart")
+                return c, hum, hrp
+            end
+
+            local function lockMouse(v)
+                if UIS.MouseEnabled then
+                    UIS.MouseBehavior = v and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
+                end
+            end
+
+            local rotCon, oldAR
+            local function faceCam(h, hrp, v)
+                if rotCon then rotCon:Disconnect() rotCon = nil end
+                if v then
+                    oldAR = h.AutoRotate
+                    h.AutoRotate = false
+                    rotCon = RS.RenderStepped:Connect(function()
+                        local cam = Wk.CurrentCamera
+                        if not (hrp and cam) then return end
+                        local lv = cam.CFrame.LookVector
+                        local flat = Vector3.new(lv.X, 0, lv.Z)
+                        if flat.Magnitude > 1e-4 then
+                            hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + flat.Unit, Vector3.yAxis)
+                        end
+                    end)
+                else
+                    if oldAR ~= nil then h.AutoRotate = oldAR end
+                end
+            end
+
+            local function reapply(v)
+                task.defer(function()
+                    local _, h, r = getParts()
+                    lockMouse(v)
+                    faceCam(h, r, v)
+                end)
+            end
+
+            local shiftLockEnabled = true
+            reapply(shiftLockEnabled)
+
+            plr.CharacterAdded:Connect(function()
+                reapply(shiftLockEnabled)
+            end)
+
+            local lastCam = Wk.CurrentCamera
+            Wk:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+                local c = Wk.CurrentCamera
+                if c ~= lastCam then
+                    lastCam = c
+                    reapply(shiftLockEnabled)
+                end
+            end)
+
+            local function InitializeFly()
+                local char = player.Character or player.CharacterAdded:Wait()
+                local root = char:WaitForChild("HumanoidRootPart")
+                local humanoid = char:WaitForChild("Humanoid")
+
+                humanoid.PlatformStand = true
+                humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+                lastPosition = root.Position
+                velocityHistory = {}
+                frameCount = 0
+                
+                root.Velocity = Vector3.zero
+                root.RotVelocity = Vector3.zero
+                root.CanCollide = false
+            end
+
+            UIS.TouchStarted:Connect(function(input)
+                if flyEnabled and not joystickTouch then
+                    local screenSize = workspace.CurrentCamera.ViewportSize
+                    if input.Position.X < screenSize.X / 2 then
+                        joystickTouch = input
+                        joystickStartPos = input.Position
+                    end
+                end
+            end)
+
+            UIS.TouchMoved:Connect(function(input)
+                if flyEnabled and input == joystickTouch then
+                    local delta = input.Position - joystickStartPos
+                    local maxRadius = 100
+                    if delta.Magnitude > maxRadius then
+                        delta = delta.Unit * maxRadius
+                    end
+                    inputVector = Vector3.new(delta.X / maxRadius, 0, delta.Y / maxRadius)
+                end
+            end)
+
+            UIS.TouchEnded:Connect(function(input)
+                if flyEnabled and input == joystickTouch then
+                    joystickTouch = nil
+                    inputVector = Vector3.zero
+                end
+            end)
+
+            UIS.InputBegan:Connect(function(input, gameProcessed)
+                if gameProcessed or not flyEnabled then return end
+                if input.UserInputType == Enum.UserInputType.Keyboard then
+                    keysPressed[input.KeyCode] = true
+                end
+            end)
+
+            UIS.InputEnded:Connect(function(input, gameProcessed)
+                if input.UserInputType == Enum.UserInputType.Keyboard then
+                    keysPressed[input.KeyCode] = false
+                end
+            end)
+
+            player.CharacterAdded:Connect(function()
+                task.wait(0.1)
+                if flyEnabled then
+                    InitializeFly()
+                end
+            end)
+
+            local function IsMoving()
+                local hasKeyboardInput = keysPressed[Enum.KeyCode.W] or keysPressed[Enum.KeyCode.A] or 
+                                        keysPressed[Enum.KeyCode.S] or keysPressed[Enum.KeyCode.D] or
+                                        keysPressed[Enum.KeyCode.Q] or keysPressed[Enum.KeyCode.E]
+                
+                local hasTouchInput = inputVector.Magnitude > 0.1
+                
+                return hasKeyboardInput or hasTouchInput
+            end
+
+            local function StartFlyLoop()
+                if flyConnection then
+                    flyConnection:Disconnect()
+                end
+                
+                if antiFallConnection then
+                    antiFallConnection:Disconnect()
+                end
+                
+                antiFallConnection = RS.Heartbeat:Connect(function()
+                    local char = player.Character
+                    if not char or not flyEnabled then return end
+                    
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    local humanoid = char:FindFirstChild("Humanoid")
+                    if not root or not humanoid then return end
+                    
+                    pcall(function()
+                        humanoid.PlatformStand = true
+                    end)
+                    
+                    pcall(function()
+                        root.Velocity = Vector3.zero
+                        root.RotVelocity = Vector3.zero
+                        root.AssemblyLinearVelocity = Vector3.zero
+                        root.AssemblyAngularVelocity = Vector3.zero
+                    end)
+                end)
+                
+                flyConnection = RS.RenderStepped:Connect(function(dt)
+                    local char = player.Character
+                    if not char or not flyEnabled then return end
+                    
+                    local root = char:FindFirstChild("HumanoidRootPart")
+                    local humanoid = char:FindFirstChild("Humanoid")
+                    if not root or not humanoid then return end
+
+                    frameCount = frameCount + 1
+                    local camCF = camera.CFrame
+                    local camRight = camCF.RightVector
+                    local camForward = camCF.LookVector
+
+                    local moveDir = Vector3.zero
+                    local moving = IsMoving()
+                    
+                    if keysPressed[Enum.KeyCode.W] or keysPressed[Enum.KeyCode.A] or 
+                       keysPressed[Enum.KeyCode.S] or keysPressed[Enum.KeyCode.D] or
+                       keysPressed[Enum.KeyCode.Q] or keysPressed[Enum.KeyCode.E] then
+                        
+                        local keyboardInput = Vector3.zero
+                        if keysPressed[Enum.KeyCode.W] then keyboardInput = keyboardInput + Vector3.new(0, 0, -1) end
+                        if keysPressed[Enum.KeyCode.S] then keyboardInput = keyboardInput + Vector3.new(0, 0, 1) end
+                        if keysPressed[Enum.KeyCode.A] then keyboardInput = keyboardInput + Vector3.new(-1, 0, 0) end
+                        if keysPressed[Enum.KeyCode.D] then keyboardInput = keyboardInput + Vector3.new(1, 0, 0) end
+                        
+                        local camRightFlat = Vector3.new(camRight.X, 0, camRight.Z).Unit
+                        local camForwardFlat = Vector3.new(camForward.X, 0, camForward.Z).Unit
+                        
+                        moveDir = (camRightFlat * keyboardInput.X + camForwardFlat * keyboardInput.Z)
+                        local targetVelocity = moveDir * speed
+                        currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 0.9))
+                        
+                        local yInput = 0
+                        if keysPressed[Enum.KeyCode.E] then yInput = 1 end
+                        if keysPressed[Enum.KeyCode.Q] then yInput = -1 end
+                        
+                        local targetYVelocity = yInput * ySpeed * 1.5
+                        currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt * 0.8, 0, 0.9)
+                        
+                    elseif inputVector.Magnitude > 0.1 then
+                        local camRightFlat = Vector3.new(camRight.X, 0, camRight.Z).Unit
+                        local camForwardFlat = Vector3.new(camForward.X, 0, camForward.Z).Unit
+                        
+                        moveDir = (camRightFlat * inputVector.X + camForwardFlat * -inputVector.Z)
+                        local targetVelocity = moveDir * speed
+                        currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 0.9))
+                        
+                        local targetYVelocity = -camForward.Y * inputVector.Z * ySpeed * 1.5
+                        currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt * 0.8, 0, 0.9)
+                    else
+                        currentVelocity = currentVelocity:Lerp(Vector3.zero, math.clamp(lerpSpeed * dt * decelerationMultiplier, 0, 0.95))
+                        currentYVelocity = currentYVelocity:Lerp(0, math.clamp(lerpSpeed * dt * decelerationMultiplier, 0, 0.95))
+                    end
+
+                    local finalVelocity = Vector3.new(currentVelocity.X, currentYVelocity, currentVelocity.Z)
+                    local newPosition = root.Position + (finalVelocity * dt)
+                    
+                    local lookDirection
+                    if moving and moveDir.Magnitude > 0.1 then
+                        local currentLook = root.CFrame.LookVector
+                        local currentLookFlat = Vector3.new(currentLook.X, 0, currentLook.Z).Unit
+                        lookDirection = currentLookFlat:Lerp(moveDir, math.clamp(rotationLerpSpeed * dt, 0, 1))
+                    else
+                        local camLookVector = camCF.LookVector
+                        lookDirection = Vector3.new(camLookVector.X, 0, camLookVector.Z).Unit
+                    end
+                    
+                    local distance = (newPosition - root.Position).Magnitude
+                    if distance > 0.005 then
+                        if distance > 3 then
+                            local steps = math.min(2, math.ceil(distance / 2.5))
+                            for i = 1, steps do
+                                local stepPos = root.Position:Lerp(newPosition, i / steps)
+                                pcall(function()
+                                    if lookDirection.Magnitude > 0 then
+                                        root.CFrame = CFrame.lookAt(stepPos, stepPos + lookDirection)
+                                    else
+                                        root.CFrame = CFrame.new(stepPos)
+                                    end
+                                end)
+                                if i < steps then
+                                    task.wait(0.016)
+                                end
+                            end
+                        else
+                            local randomMicro = Vector3.new(
+                                math.random(-1, 1) / 5000000,
+                                math.random(-1, 1) / 5000000,
+                                math.random(-1, 1) / 5000000
+                            )
+                            newPosition = newPosition + randomMicro
+                            
+                            pcall(function()
+                                if lookDirection.Magnitude > 0 then
+                                    root.CFrame = CFrame.lookAt(newPosition, newPosition + lookDirection)
+                                else
+                                    root.CFrame = CFrame.new(newPosition)
+                                end
+                            end)
+                        end
+                    else
+                        pcall(function()
+                            if lookDirection.Magnitude > 0 then
+                                root.CFrame = CFrame.lookAt(root.Position, root.Position + lookDirection)
+                            end
+                        end)
+                    end
+                    
+                    table.insert(velocityHistory, finalVelocity)
+                    if #velocityHistory > 10 then
+                        table.remove(velocityHistory, 1)
+                    end
+                    
+                    lastPosition = root.Position
+                end)
+            end
+
+            InitializeFly()
+            StartFlyLoop()
+        else
+            -- Clean up fly system
+            if flyConnection then
+                flyConnection:Disconnect()
+                flyConnection = nil
+            end
+            
+            if antiFallConnection then
+                antiFallConnection:Disconnect()
+                antiFallConnection = nil
+            end
+            
+            -- Reset character state
+            local char = game.Players.LocalPlayer.Character
+            if char then
+                local humanoid = char:FindFirstChildOfClass("Humanoid")
+                if humanoid then
+                    humanoid.PlatformStand = false
+                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
+                end
+                
+                local root = char:FindFirstChild("HumanoidRootPart")
+                if root then
+                    root.CanCollide = true
+                end
+            end
+        end
+    end
+})
 
 Misc:Section({Title = "Character Modifications"})
 Misc:Divider()
@@ -3506,3 +3888,142 @@ Visual:Toggle({
         SetupDoorESP()
     end
 })
+
+Peabert:Section({Title = "Peabert"})
+Peabert:Divider()
+
+-- Variables for Peabert functionality
+local peabertList = {}
+local selectedPeabert = nil
+
+-- Function to find and populate Peabert dropdown
+local function updatePeabertDropdown()
+    table.clear(peabertList)
+    
+    -- Search for FREEPEABERT objects (case insensitive)
+    for _, obj in ipairs(workspace:GetChildren()) do
+        if obj.Name:lower():find("freepeabert") == 1 then -- Starts with freepeabert
+            table.insert(peabertList, obj.Name)
+        end
+    end
+    
+    -- Update dropdown
+    if #peabertList > 0 then
+        peabertDropdown:Refresh(peabertList, true)
+        selectedPeabert = peabertList[1] -- Set first as default
+    else
+        peabertDropdown:Refresh({"No Peaberts Found"}, false)
+        selectedPeabert = nil
+    end
+end
+
+-- Create Peabert dropdown
+local peabertDropdown = Peabert:Dropdown({
+    Title = "Select Peabert",
+    Values = {"Searching for Peaberts..."},
+    Callback = function(selected)
+        selectedPeabert = selected
+    end
+})
+
+-- Button to refresh Peabert list
+Peabert:Button({
+    Title = "Refresh Peabert List",
+    Callback = function()
+        updatePeabertDropdown()
+        if #peabertList > 0 then
+            WindUI:Notify({
+                Title = "Peabert",
+                Content = "Found " .. #peabertList .. " Peabert(s)",
+                Duration = 3
+            })
+        else
+            WindUI:Notify({
+                Title = "Peabert",
+                Content = "No Peaberts found in workspace",
+                Duration = 3
+            })
+        end
+    end
+})
+
+-- Button to teleport to selected Peabert
+Peabert:Button({
+    Title = "Teleport to Selected Peabert",
+    Desc = "Teleports to the selected Peabert and sets up free power rolls",
+    Callback = function()
+        if not selectedPeabert or selectedPeabert == "No Peaberts Found" then
+            WindUI:Notify({
+                Title = "Error",
+                Content = "No Peabert selected or found",
+                Duration = 3
+            })
+            return
+        end
+        
+        local peabert = workspace:FindFirstChild(selectedPeabert)
+        if not peabert then
+            WindUI:Notify({
+                Title = "Error",
+                Content = "Selected Peabert no longer exists",
+                Duration = 3
+            })
+            updatePeabertDropdown()
+            return
+        end
+        
+        -- Teleport to Peabert
+        local character = LocalPlayer.Character
+        if character and character:FindFirstChild("HumanoidRootPart") then
+            character:PivotTo(peabert:GetPrimaryPartCFrame() + Vector3.new(0, 3, 0))
+            
+            -- Find and modify the proximity prompt
+            local function findAndModifyPrompt(model)
+                for _, descendant in ipairs(model:GetDescendants()) do
+                    if descendant:IsA("ProximityPrompt") and descendant.Name:find("2 FREE POWER ROLLS") then
+                        descendant.HoldDuration = 0
+                        WindUI:Notify({
+                            Title = "Peabert",
+                            Content = "Teleported and set prompt to instant!",
+                            Duration = 3
+                        })
+                        return true
+                    end
+                end
+                return false
+            end
+            
+            -- Check Body.Root path first
+            local body = peabert:FindFirstChild("Body")
+            if body then
+                local root = body:FindFirstChild("Root")
+                if root and findAndModifyPrompt(root) then
+                    return
+                end
+            end
+            
+            -- If not found in Body.Root, search the entire Peabert
+            if not findAndModifyPrompt(peabert) then
+                WindUI:Notify({
+                    Title = "Warning",
+                    Content = "Teleported but couldn't find power roll prompt",
+                    Duration = 3
+                })
+            end
+        end
+    end
+})
+
+-- Auto-refresh Peabert list on startup and when objects are added
+task.spawn(function()
+    task.wait(2) -- Wait a bit for game to load
+    updatePeabertDropdown()
+    
+    -- Monitor for new objects being added
+    workspace.ChildAdded:Connect(function(child)
+        if child.Name:lower():find("freepeabert") == 1 then
+            task.wait(0.5) -- Small delay to ensure object is fully loaded
+            updatePeabertDropdown()
+        end
+    end)
+end)
