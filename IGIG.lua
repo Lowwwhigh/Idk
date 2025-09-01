@@ -1,12 +1,4 @@
-local success, WindUI = pcall(function()
-    return loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-end)
-
-if not success then
-    warn("Failed to load WindUI:", WindUI)
-    return
-end
-
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 local correctGameIds = {
     125009265613167,
     122816944483266
@@ -51,7 +43,7 @@ local bringGuardsEnabled = false
 local bringGuardsConnection = nil
 
 local Window = WindUI:CreateWindow({
-    Title = "Tuff Guys | Ink Game V7",
+    Title = "Tuff Guys | Ink Game V7.1",
     Icon = "rbxassetid://130506306640152",
     IconThemed = true,
     Author = "Tuff Agsy",
@@ -100,8 +92,8 @@ local UL = MainSection:Tab({
 })
 
 UL:Paragraph({
-    Title = "CHANGELOGS V7",
-    Desc = "[-] Deleted Features That Activates Anti-Cheat\n[~] Fixed Fly Banning you\n[+] Added Sky Squid Game Features\n[+] Added Anti spike Hide and Seek\n[+] Added Auto collect Bandage\n[+] Added Anti Banana",
+    Title = "CHANGELOGS V7.1",
+    Desc = "[~] Changed Freeze Rope to Delete Rope and Works Fine\n[~] Fixed Auto Pull Rope\n[-] Removed Pull Modes\n[~] In Delete Rope i Added a Platform so you wont fall",
     Image = "rbxassetid://130506306640152",
 })
 
@@ -881,37 +873,6 @@ Main:Divider()
 
 local completeDalgonaEnabled = false
 local dalgonaHooked = false
-local dalgonaConnection = nil
-
-local function CompleteDalgona()
-    if not completeDalgonaEnabled then return end
-
-    local DalgonaClientModule = game.ReplicatedStorage.Modules.Games.DalgonaClient
-    if not DalgonaClientModule then return end
-
-    -- Find and modify the Dalgona progress function
-    for _, func in ipairs(getgc()) do
-        if typeof(func) == "function" and islclosure(func) and getfenv(func).script == DalgonaClientModule then
-            if debug.getinfo(func).nups == 73 then
-                setupvalue(func, 31, 9e9)
-                dalgonaHooked = true
-                break
-            end
-        end
-    end
-end
-
--- Track game changes
-local currentGame = workspace:FindFirstChild("Values") and workspace.Values:FindFirstChild("CurrentGame")
-if not currentGame then return end
-
-local function OnGameChanged(newGame)
-    if newGame == "Dalgona" and completeDalgonaEnabled then
-        CompleteDalgona()
-    else
-        dalgonaHooked = false
-    end
-end
 
 Main:Toggle({
     Title = "Complete Dalgona",
@@ -930,32 +891,47 @@ Main:Toggle({
         end
         
         if state then
-            -- Set up a one-time connection to track game changes
-            if not dalgonaConnection then
-                dalgonaConnection = currentGame.Changed:Connect(OnGameChanged)
+            -- Hook the Dalgona progress function
+            local function HookDalgona()
+                local DalgonaClientModule = game.ReplicatedStorage.Modules.Games.DalgonaClient
+                if not DalgonaClientModule then return end
+                
+                -- Find and modify the Dalgona progress function
+                for _, func in ipairs(getgc()) do
+                    if typeof(func) == "function" and islclosure(func) and getfenv(func).script == DalgonaClientModule then
+                        if debug.getinfo(func).nups >= 70 then -- Look for the main function with many upvalues
+                            -- Set progress to almost complete
+                            for i = 1, debug.getinfo(func).nups do
+                                local name, value = debug.getupvalue(func, i)
+                                if typeof(value) == "number" and value >= 0 and value < 200 then
+                                    -- Find the total count
+                                    for j = 1, debug.getinfo(func).nups do
+                                        local name2, value2 = debug.getupvalue(func, j)
+                                        if typeof(value2) == "number" and value2 > value and value2 < 500 then
+                                            -- Set progress to almost complete
+                                            debug.setupvalue(func, i, value2 - 5)
+                                            dalgonaHooked = true
+                                            return true
+                                        end
+                                    end
+                                end
+                            end
+                        end
+                    end
+                end
+                return false
             end
             
-            -- Start completion loop
-            task.spawn(function()
-                while completeDalgonaEnabled do
-                    -- Check if we're in Dalgona game
-                    if currentGame.Value == "Dalgona" then
-                        CompleteDalgona()
-                    end
-                    task.wait(1) -- Check every second
-                end
-            end)
-            
-            -- Check immediately if already in Dalgona
-            if currentGame.Value == "Dalgona" then
-                CompleteDalgona()
+            -- Try to hook immediately
+            if not HookDalgona() then
+                -- If not successful, try again after a short delay
+                task.spawn(function()
+                    task.wait(1)
+                    HookDalgona()
+                end)
             end
         else
             -- Cleanup
-            if dalgonaConnection then
-                dalgonaConnection:Disconnect()
-                dalgonaConnection = nil
-            end
             dalgonaHooked = false
         end
     end
@@ -986,26 +962,23 @@ Main:Button({
     Title = "Delete Rope",
     Desc = "Deletes the rope and creates a platform",
     Callback = function()
-        -- Delete the rope
         local rope = workspace.Effects:WaitForChild("rope")
         if rope then
             rope:Destroy()
         end
         
-        -- Remove collision
         local collision = workspace.Map:FindFirstChild("SLIGHT_IGNORE.COLLISION1")
         if collision then
             collision:Destroy()
         end
         
-        -- Create anti-fall part with the correct position
         local antiFallPart = Instance.new("Part")
         antiFallPart.Name = "AntiFallPart"
         antiFallPart.Size = Vector3.new(1000, 5, 1000)
-        antiFallPart.Position = Vector3.new(647.316162109375, 192.54104614257812, 924.5520629882812)
+        antiFallPart.Position = Vector3.new(647.316162109375, 189.54104614257812, 924.5520629882812)
         antiFallPart.Anchored = true
         antiFallPart.CanCollide = true
-        antiFallPart.Transparency = 0
+        antiFallPart.Transparency = 0.5
         antiFallPart.Color = Color3.fromRGB(128, 128, 128)
         antiFallPart.Material = Enum.Material.Concrete
         antiFallPart.Parent = workspace
@@ -1229,11 +1202,6 @@ Main:Divider()
 local tugOfWarAutoEnabled = false
 local tugOfWarConnection = nil
 
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
-local RunService = game:GetService("RunService")
-local Pull = ReplicatedStorage.Remotes:WaitForChild("TemporaryReachedBindable")
-local VALID_PULL_DATA = { { IHateYou = true } }
-
 Main:Toggle({
     Title = "Auto Pull Rope",
     Desc = "Automatically pulls the rope",
@@ -1243,7 +1211,12 @@ Main:Toggle({
         if state then
             if tugOfWarConnection then return end
             tugOfWarConnection = RunService.Heartbeat:Connect(function()
-                Pull:FireServer(VALID_PULL_DATA)
+                local args = {
+                    {
+                        IHateYou = true
+                    }
+                }
+                game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TemporaryReachedBindable"):FireServer(unpack(args))
             end)
         else
             if tugOfWarConnection then
@@ -1254,7 +1227,6 @@ Main:Toggle({
     end
 })
 
--- Add this to the Win tab after the existing sections
 Main:Section({Title = "Sky Squid Game"})
 Main:Divider()
 
@@ -1262,16 +1234,15 @@ local antiFallEnabled = false
 local antiVoidPart = nil
 
 local function createAntiVoid()
-    -- Create the anti-void part
     local antiVoid = Instance.new("Part")
-    antiVoid.Name = "AntiVoid"
-    antiVoid.Size = Vector3.new(1000, 5, 1000) -- Very wide, thick part
-    antiVoid.Position = Vector3.new(0, 960, 0) -- Positioned exactly at Y=960
+    antiVoid.Name = "SkySquidGameAntiVoid"
+    antiVoid.Size = Vector3.new(1000, 5, 1000)
+    antiVoid.Position = Vector3.new(0, 960, 0)
     antiVoid.Anchored = true
     antiVoid.CanCollide = true
-    antiVoid.Transparency = 0 -- Completely visible
-    antiVoid.Color = Color3.fromRGB(128, 128, 128) -- Gray color
-    antiVoid.Material = Enum.Material.Concrete -- Normal material
+    antiVoid.Transparency = 0.5
+    antiVoid.Color = Color3.fromRGB(128, 128, 128)
+    antiVoid.Material = Enum.Material.Concrete
     
     antiVoid.Parent = workspace
     return antiVoid
