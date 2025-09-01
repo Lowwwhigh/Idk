@@ -2543,7 +2543,7 @@ Misc:Toggle({
             end
 
             local function lockMouse(v)
-                if UIS.MouseEnabled then
+                if UIS and UIS.MouseEnabled then  -- Added nil check here
                     UIS.MouseBehavior = v and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
                 end
             end
@@ -2827,8 +2827,9 @@ Misc:Toggle({
                 antiFallConnection = nil
             end
             
-            -- Reset shiftlock/mouse behavior
-            if UIS.MouseEnabled then
+            -- Reset shiftlock/mouse behavior with proper nil check
+            local UIS = game:GetService("UserInputService")
+            if UIS and UIS.MouseEnabled then
                 UIS.MouseBehavior = Enum.MouseBehavior.Default
             end
             
