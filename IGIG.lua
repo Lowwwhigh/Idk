@@ -43,7 +43,7 @@ local bringGuardsEnabled = false
 local bringGuardsConnection = nil
 
 local Window = WindUI:CreateWindow({
-    Title = "Tuff Guys | Ink Game V7.2",
+    Title = "Tuff Guys | Ink Game V7.3",
     Icon = "rbxassetid://130506306640152",
     IconThemed = true,
     Author = "Tuff Agsy",
@@ -92,8 +92,8 @@ local UL = MainSection:Tab({
 })
 
 UL:Paragraph({
-    Title = "CHANGELOGS V7.2",
-    Desc = "[~] Fixed Fly Banning You\n[~] Fixed Dalgona (Not Tested Heheh)",
+    Title = "CHANGELOGS V7.3",
+    Desc = "[~] Added Back RLGL Godmode (No ban) mUahha\n",
     Image = "rbxassetid://130506306640152",
 })
 
@@ -198,7 +198,6 @@ Main:Toggle({
     Callback = function(state)
         touchFlingEnabled = state
         if state then
-            -- Initialize
             local function FlingPlayer()
                 local Players = game:GetService("Players")
                 local LocalPlayer = Players.LocalPlayer
@@ -208,13 +207,11 @@ Main:Toggle({
 
                 if not HumanoidRootPart then return end
 
-                -- Disable anti-fling checks (if any)
                 local velocityConnections = getconnections(HumanoidRootPart:GetPropertyChangedSignal("Velocity"))
                 for _, connection in ipairs(velocityConnections) do
                     connection:Disable()
                 end
 
-                -- Main fling logic
                 local flingActive = true
                 local flingConnection = RunService.RenderStepped:Connect(function()
                     if not flingActive or not HumanoidRootPart or not HumanoidRootPart.Parent then
@@ -222,17 +219,14 @@ Main:Toggle({
                         return
                     end
 
-                    -- Apply fling force
                     local currentVelocity = HumanoidRootPart.Velocity
                     HumanoidRootPart.Velocity = currentVelocity * 1000 + Vector3.new(0, 10000, 0)
                     
-                    -- Stabilize after initial fling
                     RunService.RenderStepped:Wait()
                     if HumanoidRootPart.Parent then
                         HumanoidRootPart.Velocity = currentVelocity
                     end
 
-                    -- Small vertical nudge to maintain fling
                     RunService.Stepped:Wait()
                     if HumanoidRootPart.Parent then
                         local nudgeDirection = ((math.floor(tick()) % 2 == 0) and 1 or -1)
@@ -240,19 +234,17 @@ Main:Toggle({
                     end
                 end)
 
-                -- Cleanup function
                 return function()
                     flingActive = false
                     if flingConnection then flingConnection:Disconnect() end
                     for _, connection in ipairs(velocityConnections) do
-                        connection:Enable() -- Re-enable anti-cheat checks
+                        connection:Enable()
                     end
                 end
             end
 
             touchFlingConnection = FlingPlayer()
             
-            -- Reinitialize on respawn
             LocalPlayer.CharacterAdded:Connect(function()
                 if touchFlingEnabled then
                     if touchFlingConnection then
@@ -262,7 +254,6 @@ Main:Toggle({
                 end
             end)
         else
-            -- Cleanup
             if touchFlingConnection then
                 touchFlingConnection()
                 touchFlingConnection = nil
@@ -329,29 +320,26 @@ local originalHookFunction = nil
 
 Main:Toggle({
     Title = "Godmode",
-    Desc = "Prevents damage by hooking remote calls and spamming position updates",
+    Desc = "Rlgl godmode like you wont gut detected in red light",
     Value = false,
     Callback = function(state)
         godmodeEnabled = state
         if state then
-            -- Hook metamethod to block damage-related remotes
             originalHookFunction = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
                 local method = getnamecallmethod()
                 local args = {...}
                 
                 if method == "FireServer" and self.Name == "rootCFrame" then
-                    return nil -- Block rootCFrame calls to prevent position overrides
+                    return nil
                 end
                 
                 return originalHookFunction(self, ...)
             end))
             
-            -- Start spamming rootCFrame with slight variations
             godmodeConnection = RunService.Heartbeat:Connect(function()
                 if godmodeEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                     local currentCFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
                     
-                    -- Add tiny variation to position (+1 to each axis)
                     local args = {
                         CFrame.new(
                             currentCFrame.Position.X + 1,
@@ -373,25 +361,23 @@ Main:Toggle({
             end)
             
             WindUI:Notify({
-                Title = "Godmode",
-                Content = "Godmode enabled - Position protection active",
+                Title = "RLGL",
+                Content = "Godmode enabled turn this off after Rlgl",
                 Duration = 3
             })
         else
-            -- Cleanup
             if godmodeConnection then
                 godmodeConnection:Disconnect()
                 godmodeConnection = nil
             end
             
-            -- Restore original hook if it exists
             if originalHookFunction then
                 hookmetamethod(game, "__namecall", originalHookFunction)
                 originalHookFunction = nil
             end
             
             WindUI:Notify({
-                Title = "Godmode",
+                Title = "RLGL",
                 Content = "Godmode disabled",
                 Duration = 3
             })
@@ -399,12 +385,11 @@ Main:Toggle({
     end
 })
 
-local injuredMode = "Save" -- Default mode
+local injuredMode = "Save"
 local helpInjuredEnabled = false
 local helpInjuredLoop = nil
 local recentlyHelpedPlayers = {}
 
--- Define the polygon area (same for all modes for now)
 local polygon = {
     Vector2.new(-52, -515),
     Vector2.new(115, -515),
@@ -468,40 +453,33 @@ local function HelpInjuredPlayer()
 
     local success = true
     pcall(function()
-        -- Move to injured player
         LocalPlayer.Character:PivotTo(injuredPlayer.Character:GetPrimaryPartCFrame())
         task.wait(0.2)
         
-        -- Pick them up
         carryPrompt.HoldDuration = 0  
         fireproximityprompt(carryPrompt)
         task.wait(0.5)
         
-        -- Determine destination based on mode
         local destination
         if injuredMode == "Save" then
-            destination = CFrame.new(-46, 1024, 110) -- Finish line
+            destination = CFrame.new(-46, 1024, 110)
         elseif injuredMode == "Troll" then
-            destination = CFrame.new(66.0978928, 1023.05371, -571.360046) -- Start position
+            destination = CFrame.new(66.0978928, 1023.05371, -571.360046)
         elseif injuredMode == "Void" then
-            destination = CFrame.new(0, -500, 0) -- Void
+            destination = CFrame.new(0, -500, 0)
         end
         
-        -- Move to destination
         LocalPlayer.Character:PivotTo(destination)
         task.wait(0.5)
         
-        -- Drop them
         game:GetService("ReplicatedStorage").Remotes.ClickedButton:FireServer({tryingtoleave = true})
         
-        -- If Void mode, teleport back to finish line
         if injuredMode == "Void" then
-            task.wait(0.5) -- Small delay before teleporting back
+            task.wait(0.5)
             LocalPlayer.Character:PivotTo(CFrame.new(-46, 1024, 110))
         end
     end)
 
-    -- Restore anti-fling if it was enabled
     if wasAntiFlingEnabled then
         antiFlingConnection = RunService.RenderStepped:Connect(function()
             pcall(function()
@@ -523,7 +501,6 @@ local function HelpInjuredPlayer()
     return success
 end
 
--- Dropdown for mode selection
 Main:Dropdown({
     Title = "Bring Injured Mode",
     Values = {"Save", "Troll", "Void"},
@@ -533,7 +510,6 @@ Main:Dropdown({
     end
 })
 
--- Toggle for activating the feature
 Main:Toggle({
     Title = "Bring Injured Players",
     Desc = "Automatically helps/drops injured players based on selected mode",
@@ -541,11 +517,9 @@ Main:Toggle({
     Callback = function(state)
         helpInjuredEnabled = state
         if state then
-            -- Initialize cooldown tracker
             recentlyHelpedPlayers = {}
             local HELP_COOLDOWN = 30 
             
-            -- Start cooldown cleanup loop
             task.spawn(function()
                 while task.wait(10) and helpInjuredEnabled do
                     local currentTime = os.time()
@@ -557,14 +531,12 @@ Main:Toggle({
                 end
             end)
 
-            -- Start main loop
             helpInjuredLoop = task.spawn(function()
                 while task.wait(1) and helpInjuredEnabled do
                     HelpInjuredPlayer()
                 end
             end)
         else
-            -- Cleanup
             if helpInjuredLoop then
                 task.cancel(helpInjuredLoop)
                 helpInjuredLoop = nil
@@ -1395,6 +1367,106 @@ Main:Button({
 
 Combat:Section({Title = "Combat"})
 Combat:Divider()
+
+Combat:Section({Title = "Reach"})
+Combat:Divider()
+
+local reachEnabled = false
+local reachConnection = nil
+local reachDistance = 5
+local reachHookFunction = nil
+
+Combat:Slider({
+    Title = "Reach Distance",
+    Value = {
+        Min = 1,
+        Max = 20,
+        Default = 5,
+    },
+    Callback = function(value)
+        reachDistance = value
+    end
+})
+
+Combat:Toggle({
+    Title = "Reach",
+    Desc = "Teleports to nearest player within reach distance",
+    Value = false,
+    Callback = function(state)
+        reachEnabled = state
+        if state then
+            -- Hook metamethod to allow rootCFrame calls for reach
+            reachHookFunction = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                local args = {...}
+                
+                -- Allow our reach calls to go through
+                if method == "FireServer" and self.Name == "rootCFrame" and reachEnabled then
+                    return reachHookFunction(self, ...)
+                end
+                
+                return reachHookFunction(self, ...)
+            end))
+            
+            -- Start reach system
+            reachConnection = RunService.Heartbeat:Connect(function()
+                if reachEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local myRoot = LocalPlayer.Character.HumanoidRootPart
+                    local closestPlayer = nil
+                    local closestDistance = reachDistance
+                    
+                    -- Find nearest player within reach distance
+                    for _, player in ipairs(Players:GetPlayers()) do
+                        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
+                            local distance = (player.Character.HumanoidRootPart.Position - myRoot.Position).Magnitude
+                            if distance <= reachDistance and distance < closestDistance then
+                                closestPlayer = player
+                                closestDistance = distance
+                            end
+                        end
+                    end
+                    
+                    -- Teleport to nearest player if found
+                    if closestPlayer and closestPlayer.Character then
+                        local targetRoot = closestPlayer.Character.HumanoidRootPart
+                        
+                        local args = {
+                            targetRoot.CFrame
+                        }
+                        
+                        pcall(function()
+                            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("rootCFrame"):FireServer(unpack(args))
+                        end)
+                    end
+                end
+            end)
+            
+            WindUI:Notify({
+                Title = "Reach",
+                Content = "Reach enabled - Distance: " .. reachDistance,
+                Duration = 3
+            })
+        else
+            -- Cleanup
+            if reachConnection then
+                reachConnection:Disconnect()
+                reachConnection = nil
+            end
+            
+            -- Restore original hook if it exists
+            if reachHookFunction then
+                hookmetamethod(game, "__namecall", reachHookFunction)
+                reachHookFunction = nil
+            end
+            
+            WindUI:Notify({
+                Title = "Reach",
+                Content = "Reach disabled",
+                Duration = 3
+            })
+        end
+    end
+})
 
 
 local function IsGuard(model)
