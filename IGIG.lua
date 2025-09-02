@@ -43,7 +43,7 @@ local bringGuardsEnabled = false
 local bringGuardsConnection = nil
 
 local Window = WindUI:CreateWindow({
-    Title = "Tuff Guys | Ink Game V7.1",
+    Title = "Tuff Guys | Ink Game V7.2",
     Icon = "rbxassetid://130506306640152",
     IconThemed = true,
     Author = "Tuff Agsy",
@@ -92,8 +92,8 @@ local UL = MainSection:Tab({
 })
 
 UL:Paragraph({
-    Title = "CHANGELOGS V7.1",
-    Desc = "[~] Changed Freeze Rope to Delete Rope and Works Fine\n[~] Fixed Auto Pull Rope\n[-] Removed Pull Modes\n[~] In Delete Rope i Added a Platform so you wont fall",
+    Title = "CHANGELOGS V7.2",
+    Desc = "[~] Fixed Fly Banning You\n[~] Fixed Dalgona (Not Tested Heheh)",
     Image = "rbxassetid://130506306640152",
 })
 
@@ -319,6 +319,82 @@ Main:Button({
         local hrp = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
         if hrp then
             hrp.CFrame = CFrame.new(-46, 1024, 110)
+        end
+    end
+})
+
+local godmodeEnabled = false
+local godmodeConnection = nil
+local originalHookFunction = nil
+
+Main:Toggle({
+    Title = "Godmode",
+    Desc = "Prevents damage by hooking remote calls and spamming position updates",
+    Value = false,
+    Callback = function(state)
+        godmodeEnabled = state
+        if state then
+            -- Hook metamethod to block damage-related remotes
+            originalHookFunction = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+                local method = getnamecallmethod()
+                local args = {...}
+                
+                if method == "FireServer" and self.Name == "rootCFrame" then
+                    return nil -- Block rootCFrame calls to prevent position overrides
+                end
+                
+                return originalHookFunction(self, ...)
+            end))
+            
+            -- Start spamming rootCFrame with slight variations
+            godmodeConnection = RunService.Heartbeat:Connect(function()
+                if godmodeEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    local currentCFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
+                    
+                    -- Add tiny variation to position (+1 to each axis)
+                    local args = {
+                        CFrame.new(
+                            currentCFrame.Position.X + 1,
+                            currentCFrame.Position.Y + 1,
+                            currentCFrame.Position.Z + 1,
+                            currentCFrame.LookVector.X,
+                            currentCFrame.LookVector.Y,
+                            currentCFrame.LookVector.Z,
+                            currentCFrame.UpVector.X,
+                            currentCFrame.UpVector.Y,
+                            currentCFrame.UpVector.Z
+                        )
+                    }
+                    
+                    pcall(function()
+                        game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("rootCFrame"):FireServer(unpack(args))
+                    end)
+                end
+            end)
+            
+            WindUI:Notify({
+                Title = "Godmode",
+                Content = "Godmode enabled - Position protection active",
+                Duration = 3
+            })
+        else
+            -- Cleanup
+            if godmodeConnection then
+                godmodeConnection:Disconnect()
+                godmodeConnection = nil
+            end
+            
+            -- Restore original hook if it exists
+            if originalHookFunction then
+                hookmetamethod(game, "__namecall", originalHookFunction)
+                originalHookFunction = nil
+            end
+            
+            WindUI:Notify({
+                Title = "Godmode",
+                Content = "Godmode disabled",
+                Duration = 3
+            })
         end
     end
 })
@@ -644,7 +720,7 @@ local completeDalgonaEnabled = false
 local dalgonaHooked = false
 
 Main:Toggle({
-    Title = "Complete Dalgona",
+    Title = "Complete Dalgona [Patched Or Not Idk]",
     Desc = "Automatically completes the Dalgona candy (no lag)",
     Value = false,
     Callback = function(state)
