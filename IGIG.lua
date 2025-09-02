@@ -1390,7 +1390,7 @@ Combat:Slider({
 
 Combat:Toggle({
     Title = "Reach",
-    Desc = "Teleports to nearest player within reach distance",
+    Desc = "Teleports to all nearest players within reach distance",
     Value = false,
     Callback = function(state)
         reachEnabled = state
@@ -1412,38 +1412,43 @@ Combat:Toggle({
             reachConnection = RunService.Heartbeat:Connect(function()
                 if reachEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
                     local myRoot = LocalPlayer.Character.HumanoidRootPart
-                    local closestPlayer = nil
-                    local closestDistance = reachDistance
+                    local targetPlayers = {}
                     
-                    -- Find nearest player within reach distance
+                    -- Find all players within reach distance
                     for _, player in ipairs(Players:GetPlayers()) do
                         if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
                             local distance = (player.Character.HumanoidRootPart.Position - myRoot.Position).Magnitude
-                            if distance <= reachDistance and distance < closestDistance then
-                                closestPlayer = player
-                                closestDistance = distance
+                            if distance <= reachDistance then
+                                table.insert(targetPlayers, {player = player, distance = distance})
                             end
                         end
                     end
                     
-                    -- Teleport to nearest player if found
-                    if closestPlayer and closestPlayer.Character then
-                        local targetRoot = closestPlayer.Character.HumanoidRootPart
-                        
-                        local args = {
-                            targetRoot.CFrame
-                        }
-                        
-                        pcall(function()
-                            game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("rootCFrame"):FireServer(unpack(args))
-                        end)
+                    -- Sort by distance (closest first)
+                    table.sort(targetPlayers, function(a, b)
+                        return a.distance < b.distance
+                    end)
+                    
+                    -- Teleport to each target player rapidly
+                    for _, target in ipairs(targetPlayers) do
+                        if target.player.Character and target.player.Character:FindFirstChild("HumanoidRootPart") then
+                            local targetRoot = target.player.Character.HumanoidRootPart
+                            
+                            local args = {
+                                targetRoot.CFrame
+                            }
+                            
+                            pcall(function()
+                                game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("rootCFrame"):FireServer(unpack(args))
+                            end)
+                        end
                     end
                 end
             end)
             
             WindUI:Notify({
                 Title = "Reach",
-                Content = "Reach enabled - Distance: " .. reachDistance,
+                Content = "Multi-Reach enabled - Distance: " .. reachDistance,
                 Duration = 3
             })
         else
@@ -1461,7 +1466,7 @@ Combat:Toggle({
             
             WindUI:Notify({
                 Title = "Reach",
-                Content = "Reach disabled",
+                Content = "Multi-Reach disabled",
                 Duration = 3
             })
         end
