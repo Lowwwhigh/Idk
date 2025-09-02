@@ -325,16 +325,18 @@ Main:Toggle({
     Callback = function(state)
         godmodeEnabled = state
         if state then
-            originalHookFunction = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                local args = {...}
-                
-                if method == "FireServer" and self.Name == "rootCFrame" then
-                    return nil
-                end
-                
-                return originalHookFunction(self, ...)
-            end))
+            if not originalHookFunction then
+                originalHookFunction = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
+                    local method = getnamecallmethod()
+                    local args = {...}
+                    
+                    if method == "FireServer" and self.Name == "rootCFrame" and godmodeEnabled then
+                        return nil
+                    end
+                    
+                    return originalHookFunction(self, ...)
+                end))
+            end
             
             godmodeConnection = RunService.Heartbeat:Connect(function()
                 if godmodeEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -371,16 +373,7 @@ Main:Toggle({
                 godmodeConnection = nil
             end
             
-            if originalHookFunction then
-                hookmetamethod(game, "__namecall", originalHookFunction)
-                originalHookFunction = nil
-            end
             
-            WindUI:Notify({
-                Title = "RLGL",
-                Content = "Godmode disabled",
-                Duration = 3
-            })
         end
     end
 })
