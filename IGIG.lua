@@ -2231,6 +2231,10 @@ local customTagInput = ""
 local applyTagEnabled = false
 local tagApplyConnection = nil
 
+local customTagInput = ""
+local applyTagEnabled = false
+local tagApplyConnection = nil
+
 Utility:Input({
     Title = "Custom Player Tag",
     Desc = "Enter custom tag text",
@@ -2255,46 +2259,82 @@ Utility:Toggle({
                 
                 local player = game:GetService("Players").LocalPlayer
                 
-                -- Find or create the PlayerTagValue NumberValue
+                -- Find or create the PlayerTagValue StringValue (not NumberValue)
                 local tagValue = player:FindFirstChild("PlayerTagValue")
-                end
                 
-                -- Set the value (assuming it should be a number representation of the tag)
-                local numericValue = 0
-                if customTagInput ~= "" then
-                    for i = 1, #customTagInput do
-                        numericValue = numericValue + string.byte(customTagInput, i)
-                    end
-                end
-                tagValue.Value = numericValue
+                -- Set the value as text (not numeric)
+                tagValue.Value = customTagInput
                 
                 -- Update character tags if character exists
                 if player.Character then
-                    local frontTag = player.Character:FindFirstChild("PlayerTags") and player.Character.PlayerTags:FindFirstChild("Front")
-                    local backTag = player.Character:FindFirstChild("PlayerTags") and player.Character.PlayerTags:FindFirstChild("Back")
-                    
-                    if frontTag and frontTag:FindFirstChild("SurfaceGui") and frontTag.SurfaceGui:FindFirstChild("TextLabel") then
-                        frontTag.SurfaceGui.TextLabel.Text = customTagInput
-                    end
-                    
-                    if backTag and backTag:FindFirstChild("SurfaceGui") and backTag.SurfaceGui:FindFirstChild("TextLabel") then
-                        backTag.SurfaceGui.TextLabel.Text = customTagInput
+                    local playerTags = player.Character:FindFirstChild("PlayerTags")
+                    if playerTags then
+                        local frontTag = playerTags:FindFirstChild("Front")
+                        local backTag = playerTags:FindFirstChild("Back")
+                        
+                        if frontTag and frontTag:FindFirstChild("SurfaceGui") and frontTag.SurfaceGui:FindFirstChild("TextLabel") then
+                            frontTag.SurfaceGui.TextLabel.Text = customTagInput
+                        end
+                        
+                        if backTag and backTag:FindFirstChild("SurfaceGui") and backTag.SurfaceGui:FindFirstChild("TextLabel") then
+                            backTag.SurfaceGui.TextLabel.Text = customTagInput
+                        end
                     end
                 end
             end
             
+            -- Apply immediately
             applyPlayerTag()
             
+            -- Set up connection to reapply when character changes
             tagApplyConnection = LocalPlayer.CharacterAdded:Connect(function(character)
                 if applyTagEnabled then
+                    task.wait(0.5) -- Wait for character to fully load
                     applyPlayerTag()
                 end
             end)
+            
+            -- Also monitor for tag changes in the current character
+            if LocalPlayer.Character then
+                local playerTags = LocalPlayer.Character:WaitForChild("PlayerTags", 2)
+                if playerTags then
+                    playerTags.ChildAdded:Connect(function(child)
+                        if applyTagEnabled and (child.Name == "Front" or child.Name == "Back") then
+                            applyPlayerTag()
+                        end
+                    end)
+                end
+            end
+            
         else
-            -- Clean up
+            -- Clean up when disabled
             if tagApplyConnection then
                 tagApplyConnection:Disconnect()
                 tagApplyConnection = nil
+            end
+            
+            -- Reset to default (empty) tag
+            local player = game:GetService("Players").LocalPlayer
+            local tagValue = player:FindFirstChild("PlayerTagValue")
+            if tagValue then
+                tagValue.Value = ""
+            end
+            
+            -- Clear visual tags
+            if player.Character then
+                local playerTags = player.Character:FindFirstChild("PlayerTags")
+                if playerTags then
+                    local frontTag = playerTags:FindFirstChild("Front")
+                    local backTag = playerTags:FindFirstChild("Back")
+                    
+                    if frontTag and frontTag:FindFirstChild("SurfaceGui") and frontTag.SurfaceGui:FindFirstChild("TextLabel") then
+                        frontTag.SurfaceGui.TextLabel.Text = ""
+                    end
+                    
+                    if backTag and backTag:FindFirstChild("SurfaceGui") and backTag.SurfaceGui:FindFirstChild("TextLabel") then
+                        backTag.SurfaceGui.TextLabel.Text = ""
+                    end
+                end
             end
         end
     end
