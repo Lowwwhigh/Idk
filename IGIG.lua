@@ -931,15 +931,18 @@ Main:Button({
 -- Update the Teleport to Exit Door button
 Main:Button({
     Title = "Teleport to Exit Door",
-    Desc = "Teleports to the exit door",
+    Desc = "Teleports to the exit door once",
     Callback = function()
         -- Find the exit door in workspace
         local exitDoor = nil
         
         for _, obj in pairs(workspace:GetDescendants()) do
             if obj.Name == "EXITDOOR" and obj:IsA("Model") and obj.PrimaryPart then
-                exitDoor = obj
-                break
+                -- Check if the door has the ActuallyWorks attribute and it's true
+                if obj:GetAttribute("ActuallyWorks") == true then
+                    exitDoor = obj
+                    break
+                end
             end
         end
         
@@ -2179,7 +2182,7 @@ Utility:Divider()
 
 Utility:Toggle({
     Title = "Get VIP",
-    Desc = "Gives you VIP status and chat tag",
+    Desc = "Gives you VIP",
     Value = false,
     Callback = function(state)
         pcall(function()
@@ -2187,41 +2190,30 @@ Utility:Toggle({
             player:SetAttribute("VIPChatTag", state)
             player:SetAttribute("__OwnsVIPGamepass", state)
             
-            -- Apply clothing color if VIP is enabled
             if state then
-                -- Get the ClothingColor attribute
-                local clothingColor = player:GetAttribute("ClothingColor")
-                
-                -- Apply to character if it exists
-                if player.Character then
-                    local shirt = player.Character:FindFirstChildOfClass("Shirt")
-                    local pants = player.Character:FindFirstChildOfClass("Pants")
-                    
-                    if clothingColor and shirt then
-                        shirt.Color3 = clothingColor
-                    end
-                    
-                    if clothingColor and pants then
-                        pants.Color3 = clothingColor
-                    end
+                if not getgenv().VIPClothingConnection then
+                    getgenv().VIPClothingConnection = RunService.Heartbeat:Connect(function()
+                        local clothingColor = player:GetAttribute("ClothingColor")
+                        if clothingColor and player.Character then
+                            local shirt = player.Character:FindFirstChildOfClass("Shirt")
+                            local pants = player.Character:FindFirstChildOfClass("Pants")
+                            
+                            if shirt then
+                                shirt.Color3 = clothingColor
+                            end
+                            
+                            if pants then
+                                pants.Color3 = clothingColor
+                            end
+                        end
+                    end)
                 end
-                
-                -- Set up connection for when character changes
-                player.CharacterAdded:Connect(function(character)
-                    task.wait(0.5) -- Wait for character to fully load
-                    
-                    local shirt = character:FindFirstChildOfClass("Shirt")
-                    local pants = character:FindFirstChildOfClass("Pants")
-                    local clothingColor = player:GetAttribute("ClothingColor")
-                    
-                    if clothingColor and shirt then
-                        shirt.Color3 = clothingColor
-                    end
-                    
-                    if clothingColor and pants then
-                        pants.Color3 = clothingColor
-                    end
-                end)
+            else
+                -- Disconnect the heartbeat connection when VIP is disabled
+                if getgenv().VIPClothingConnection then
+                    getgenv().VIPClothingConnection:Disconnect()
+                    getgenv().VIPClothingConnection = nil
+                end
             end
         end)
     end
@@ -2254,7 +2246,7 @@ Utility:Divider()
 
 Utility:Toggle({
     Title = "Get Parkour Slide",
-    Desc = "Enables the parkour slide ability",
+    Desc = "Gives the parkour slide ability",
     Value = false,
     Callback = function(state)
         pcall(function()
@@ -2299,7 +2291,7 @@ local phantomDashConnection = nil
 
 Utility:Toggle({
     Title = "No Cooldown Phantom Step",
-    Desc = "Removes cooldown from Phantom Step dash ability",
+    Desc = "Removes cooldown from Phantom Step",
     Value = false,
     Callback = function(state)
         phantomDashEnabled = state
