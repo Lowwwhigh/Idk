@@ -43,7 +43,7 @@ local bringGuardsEnabled = false
 local bringGuardsConnection = nil
 
 local Window = WindUI:CreateWindow({
-    Title = "Tuff Guys | Ink Game V7.3",
+    Title = "Tuff Guys | Ink Game V7.5",
     Icon = "rbxassetid://130506306640152",
     IconThemed = true,
     Author = "Tuff Agsy",
@@ -92,8 +92,8 @@ local UL = MainSection:Tab({
 })
 
 UL:Paragraph({
-    Title = "CHANGELOGS V7.3",
-    Desc = "[~] Added Back RLGL Godmode (No ban) mUahha\n",
+    Title = "CHANGELOGS V7.5",
+    Desc = "[~] Added Back RLGL Godmode (No ban) Muahha\n[+] Added Get Dropped Keys in Hide and Seek\n[+] Added Teleport to Exit Door in Hide and Seek\n[+] Added Get VIP toggle in Utility\n[+] Added Can Spectate toggle in Utility\n[+] Added Get Parkour Slide in Utility\n[~] Changed Phantom Step to toggle\n[+] Added Always Can Revive in Utility\n[+] Added Get Lighter in Dalgona",
     Image = "rbxassetid://130506306640152",
 })
 
@@ -868,6 +868,22 @@ Main:Toggle({
         end
     end
 })
+Main:Button({
+    Title = "Get Lighter",
+    Desc = "Gives you lighter",
+    Callback = function()
+        pcall(function()
+            local player = game:GetService("Players").LocalPlayer
+            player:SetAttribute("HasLighter", true)
+            
+            WindUI:Notify({
+                Title = "Dalgona",
+                Content = "Got Lighter",
+                Duration = 3
+            })
+        end)
+    end
+})
 
 
 Main:Section({Title = "Jump Rope"})
@@ -949,6 +965,94 @@ Main:Button({
     end
 })
 
+Main:Button({
+    Title = "Get Dropped Keys",
+    Desc = "Teleports to keys you haven't collected yet",
+    Callback = function()
+        -- Get the player's collected keys
+        local collectedKeys = {}
+        local player = game.Players.LocalPlayer
+        
+        -- Look for collected keys folder in player
+        for _, child in pairs(player:GetChildren()) do
+            local lowerName = child.Name:lower()
+            if (lowerName:find("^collected") or lowerName:find("^keys")) and child:IsA("Folder") then
+                -- Check for square, triangle, circle folders
+                for _, keyType in pairs(child:GetChildren()) do
+                    if keyType:IsA("Folder") then
+                        local keyTypeName = keyType.Name:lower()
+                        if keyTypeName == "square" or keyTypeName == "triangle" or keyTypeName == "circle" then
+                            collectedKeys[keyTypeName] = true
+                        end
+                    end
+                end
+                break -- Found the folder, no need to continue
+            end
+        end
+        
+        -- Find uncollected keys in workspace
+        local uncollectedKeys = {}
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj.Name:lower():find("key") and obj:IsA("Model") and obj.PrimaryPart then
+                local keyType = nil
+                
+                -- Determine key type
+                for _, kType in pairs({"square", "triangle", "circle"}) do
+                    if obj.Name:lower():find(kType) then
+                        keyType = kType
+                        break
+                    end
+                end
+                
+                -- Add to uncollected if player doesn't have this key type
+                if keyType and not collectedKeys[keyType] then
+                    table.insert(uncollectedKeys, obj)
+                end
+            end
+        end
+        
+        if #uncollectedKeys > 0 then
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                character:PivotTo(uncollectedKeys[1]:GetPrimaryPartCFrame() + Vector3.new(0, 3, 0))
+            end
+        else
+            WindUI:Notify({
+                Title = "Get Dropped Keys",
+                Content = "You have all keys gang",
+                Duration = 3
+            })
+        end
+    end
+})
+
+Main:Button({
+    Title = "Teleport to Exit Door",
+    Desc = "Teleports to the exit door once",
+    Callback = function()
+        local exitDoor = nil
+        
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj.Name == "EXITDOOR" and obj:IsA("Model") and obj.PrimaryPart then
+                exitDoor = obj
+                break
+            end
+        end
+        
+        if exitDoor then
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                character:PivotTo(exitDoor:GetPrimaryPartCFrame() + Vector3.new(0, 3, 0))
+                WindUI:Notify({
+                    Title = "Teleport to Exit Door",
+                    Content = "Teleported to exit door",
+                    Duration = 3
+                })
+            end
+        else
+        end
+    end
+})
 
 local hiderAttachEnabled = false
 local hiderAttachRange = 50
@@ -1035,19 +1139,6 @@ Main:Toggle({
         end
     end
 })
-
-Main:Slider({
-    Title = "Hider Behind Distance",
-    Value = {
-        Min = 0.7,
-        Max = 5,
-        Default = 1.5,
-    },
-    Callback = function(value)
-        hiderAttachBehindDistance = value
-    end
-})
-
 
 Main:Button({
     Title = "Teleport To Hider",
@@ -2111,16 +2202,85 @@ task.spawn(function()
     end
 end)
 
+Utility:Section({Title = "Idk"})
+Utility:Divider()
+
+Utility:Toggle({
+    Title = "Get VIP",
+    Desc = "Gives you VIP status and chat tag",
+    Value = false,
+    Callback = function(state)
+        pcall(function()
+            local player = game:GetService("Players").LocalPlayer
+            player:SetAttribute("VIPChatTag", state)
+            player:SetAttribute("__OwnsVIPGamepass", state)
+        end)
+    end
+})
+
+Utility:Toggle({
+    Title = "Always Can Revive",
+    Desc = "Allows revive in any game",
+    Value = false,
+    Callback = function(state)
+        pcall(function()
+            workspace.Values.CanRevive.Value = state
+        end)
+    end
+})
+
+Utility:Toggle({
+    Title = "Can Spectate",
+    Desc = "Allows spectating",
+    Value = false,
+    Callback = function(state)
+        pcall(function()
+            workspace.Values.CanSpectateIfWonGame.Value = state
+        end)
+    end
+})
+
 Utility:Section({Title = "Power"})
 Utility:Divider()
 
-Utility:Button({
-    Title = "Change to Phantom Step",
+Utility:Toggle({
+    Title = "Get Parkour Slide",
+    Desc = "Enables the parkour slide ability",
+    Value = false,
+    Callback = function(state)
+        pcall(function()
+            local slideButton = game:GetService("Players").LocalPlayer.PlayerGui.MobileSupport.SlideButton
+            slideButton.Active = state
+            slideButton.Visible = state
+        end)
+    end
+})
+
+-- Modify the existing "Change to Phantom Step" button to be a toggle that saves the old power
+local phantomStepEnabled = false
+local previousPower = nil
+
+Utility:Toggle({
+    Title = "Get Phantom Step",
     Desc = "Equips the Phantom Step power",
-    Callback = function()
+    Value = false,
+    Callback = function(state)
+        phantomStepEnabled = state
         pcall(function()
             local player = game:GetService("Players").LocalPlayer
-            player:SetAttribute("_EquippedPower", "PHANTOM STEP")
+            
+            if state then
+                -- Save current power before changing
+                previousPower = player:GetAttribute("_EquippedPower")
+                player:SetAttribute("_EquippedPower", "PHANTOM STEP")
+            else
+                -- Restore previous power if available
+                if previousPower then
+                    player:SetAttribute("_EquippedPower", previousPower)
+                else
+                    player:SetAttribute("_EquippedPower", nil)
+                end
+            end
         end)
     end
 })
@@ -3812,7 +3972,7 @@ local function SetupKeyESP()
 end
 
 Visual:Toggle({
-    Title = "ESP Key",
+    Title = "ESP Dropped Keys",
     Desc = "Highlights keys in Hide and Seek with billboard text",
     Value = false,
     Callback = function(state)
