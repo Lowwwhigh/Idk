@@ -2186,6 +2186,43 @@ Utility:Toggle({
             local player = game:GetService("Players").LocalPlayer
             player:SetAttribute("VIPChatTag", state)
             player:SetAttribute("__OwnsVIPGamepass", state)
+            
+            -- Apply clothing color if VIP is enabled
+            if state then
+                -- Get the ClothingColor attribute
+                local clothingColor = player:GetAttribute("ClothingColor")
+                
+                -- Apply to character if it exists
+                if player.Character then
+                    local shirt = player.Character:FindFirstChildOfClass("Shirt")
+                    local pants = player.Character:FindFirstChildOfClass("Pants")
+                    
+                    if clothingColor and shirt then
+                        shirt.Color3 = clothingColor
+                    end
+                    
+                    if clothingColor and pants then
+                        pants.Color3 = clothingColor
+                    end
+                end
+                
+                -- Set up connection for when character changes
+                player.CharacterAdded:Connect(function(character)
+                    task.wait(0.5) -- Wait for character to fully load
+                    
+                    local shirt = character:FindFirstChildOfClass("Shirt")
+                    local pants = character:FindFirstChildOfClass("Pants")
+                    local clothingColor = player:GetAttribute("ClothingColor")
+                    
+                    if clothingColor and shirt then
+                        shirt.Color3 = clothingColor
+                    end
+                    
+                    if clothingColor and pants then
+                        pants.Color3 = clothingColor
+                    end
+                end)
+            end
         end)
     end
 })
