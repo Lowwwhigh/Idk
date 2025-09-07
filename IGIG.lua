@@ -93,7 +93,7 @@ local UL = MainSection:Tab({
 
 UL:Paragraph({
     Title = "CHANGELOGS V7.5",
-    Desc = "[~] Added Back RLGL Godmode (No ban) Muahha\n[+] Added Get Dropped Keys in Hide and Seek\n[+] Added Teleport to Exit Door in Hide and Seek\n[+] Added Get VIP toggle in Utility\n[+] Added Can Spectate toggle in Utility\n[+] Added Get Parkour Slide in Utility\n[~] Changed Phantom Step to toggle\n[+] Added Always Can Revive in Utility\n[+] Added Get Lighter in Dalgona\n[~] Fixed Complete Dalgona",
+    Desc = "[~] Added Back RLGL Godmode (No ban) Muahha\n[+] Added Get Dropped Keys in Hide and Seek\n[+] Added Teleport to Exit Door in Hide and Seek\n[+] Added Get VIP toggle in Utility\n[+] Added Can Spectate toggle in Utility\n[+] Added Get Parkour Slide in Utility\n[~] Changed Phantom Step to toggle\n[+] Added Always Can Revive in Utility\n[+] Added Get Lighter in Dalgona\n[~] Fixed Complete Dalgona\n[+] Added Custom Player Tag\n",
     Image = "rbxassetid://130506306640152",
 })
 
@@ -316,8 +316,6 @@ Main:Button({
 local godmodeEnabled = false
 local godmodeConnection = nil
 local originalHookFunction = nil
-local safeFolderCheckConnection = nil
-
 Main:Toggle({
     Title = "Godmode",
     Desc = "Rlgl godmode like you wont gut detected in red light",
@@ -338,53 +336,28 @@ Main:Toggle({
                 end))
             end
             
-            -- Function to check for SafeRedLightGreenLight folder
-            local function checkSafeFolder()
-                local character = LocalPlayer.Character
-                if not character then return true end
-                
-                return character:FindFirstChild("SafeRedLightGreenLight") ~= nil
-            end
-            
             godmodeConnection = RunService.Heartbeat:Connect(function()
                 if godmodeEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    -- Check if safe folder exists - if it does, disable godmode temporarily
-                    if checkSafeFolder() then
-                        return
-                    end
-                    
-                    local currentCFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
+                    -- Use the complete RLGL position with 0.1 offset instead of current position
+                    local targetCFrame = CFrame.new(-46, 1024, 110) + Vector3.new(0.1, 0.1, 0.1)
                     
                     local args = {
                         CFrame.new(
-                            currentCFrame.Position.X + 0.1,
-                            currentCFrame.Position.Y + 0.1,
-                            currentCFrame.Position.Z + 0.1,
-                            currentCFrame.LookVector.X,
-                            currentCFrame.LookVector.Y,
-                            currentCFrame.LookVector.Z,
-                            currentCFrame.UpVector.X,
-                            currentCFrame.UpVector.Y,
-                            currentCFrame.UpVector.Z
+                            targetCFrame.Position.X,
+                            targetCFrame.Position.Y,
+                            targetCFrame.Position.Z,
+                            targetCFrame.LookVector.X,
+                            targetCFrame.LookVector.Y,
+                            targetCFrame.LookVector.Z,
+                            targetCFrame.UpVector.X,
+                            targetCFrame.UpVector.Y,
+                            targetCFrame.UpVector.Z
                         )
                     }
                     
                     pcall(function()
                         game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("rootCFrame"):FireServer(unpack(args))
                     end)
-                end
-            end)
-            
-            -- Monitor for SafeRedLightGreenLight folder changes
-            safeFolderCheckConnection = RunService.Heartbeat:Connect(function()
-                if not godmodeEnabled then return end
-                
-                local character = LocalPlayer.Character
-                if character then
-                    local safeFolder = character:FindFirstChild("SafeRedLightGreenLight")
-                    if safeFolder then
-                        -- Safe folder exists, godmode is automatically disabled by the check above
-                    end
                 end
             end)
             
@@ -397,11 +370,6 @@ Main:Toggle({
             if godmodeConnection then
                 godmodeConnection:Disconnect()
                 godmodeConnection = nil
-            end
-            
-            if safeFolderCheckConnection then
-                safeFolderCheckConnection:Disconnect()
-                safeFolderCheckConnection = nil
             end
         end
     end
@@ -2298,8 +2266,18 @@ Utility:Toggle({
                 
                 local player = game:GetService("Players").LocalPlayer
                 
+                -- Find or create the PlayerTagValue NumberValue
                 local tagValue = player:FindFirstChild("PlayerTagValue")
-                tagValue.Value = customTagInput
+                end
+                
+                -- Set the value (assuming it should be a number representation of the tag)
+                local numericValue = 0
+                if customTagInput ~= "" then
+                    for i = 1, #customTagInput do
+                        numericValue = numericValue + string.byte(customTagInput, i)
+                    end
+                end
+                tagValue.Value = numericValue
                 
                 -- Update character tags if character exists
                 if player.Character then
@@ -2316,12 +2294,9 @@ Utility:Toggle({
                 end
             end
             
-            -- Apply immediately
             applyPlayerTag()
             
-            -- Set up connection to reapply when character changes
-            tagApplyConnection = player.CharacterAdded:Connect(function(character)
-                task.wait(0.5) -- Wait for character to fully load
+            tagApplyConnection = LocalPlayer.CharacterAdded:Connect(function(character)
                 if applyTagEnabled then
                     applyPlayerTag()
                 end
