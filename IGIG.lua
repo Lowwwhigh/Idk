@@ -624,14 +624,14 @@ Main:Toggle({
             if not character then return end
             
             -- Find and destroy the PlayingGlassBridge object if it exists
-            local playingGlassBridge = character:FindFirstChild("PlayingGlassBridge")
+            local playingGlassBridge = character:WaitForChild("PlayingGlassBridge")
             if playingGlassBridge then
                 playingGlassBridge:Destroy()
             end
             
             -- Create an invisible collision part for breakable tiles (separate from tile models)
             local function setupBreakImmunity()
-                local glassHolder = workspace:FindFirstChild("GlassBridge") and workspace.GlassBridge:FindFirstChild("GlassHolder")
+                local glassHolder = workspace:WaitForChild("GlassBridge") and workspace.GlassBridge:WaitForChild("GlassHolder")
                 if not glassHolder then return end
                 
                 -- Clear existing collisions
@@ -965,6 +965,43 @@ Main:Button({
     end
 })
 
+-- Update the Teleport to Exit Door button
+Main:Button({
+    Title = "Teleport to Exit Door",
+    Desc = "Teleports to the exit door once",
+    Callback = function()
+        -- Find the exit door in workspace
+        local exitDoor = nil
+        
+        for _, obj in pairs(workspace:GetDescendants()) do
+            if obj.Name == "EXITDOOR" and obj:IsA("Model") and obj.PrimaryPart then
+                exitDoor = obj
+                break
+            end
+        end
+        
+        -- Teleport to the exit door
+        if exitDoor then
+            local character = LocalPlayer.Character
+            if character and character:FindFirstChild("HumanoidRootPart") then
+                -- Get position 3 studs in front of the door
+                local doorCFrame = exitDoor:GetPrimaryPartCFrame()
+                local positionInFront = doorCFrame.Position + (doorCFrame.LookVector * 3)
+                local targetCFrame = CFrame.new(positionInFront, doorCFrame.Position)
+                
+                character:PivotTo(targetCFrame)
+                WindUI:Notify({
+                    Title = "Teleport to Exit Door",
+                    Content = "Teleported to exit door",
+                    Duration = 3
+                })
+            end
+        else
+        end
+    end
+})
+
+-- Update the Get Dropped Keys button
 Main:Button({
     Title = "Get Dropped Keys",
     Desc = "Teleports to keys you haven't collected yet",
@@ -993,15 +1030,17 @@ Main:Button({
         -- Find uncollected keys in workspace
         local uncollectedKeys = {}
         for _, obj in pairs(workspace:GetDescendants()) do
-            if obj.Name:lower():find("key") and obj:IsA("Model") and obj.PrimaryPart then
+            if obj:IsA("Model") and obj.PrimaryPart then
+                local objName = obj.Name:lower()
                 local keyType = nil
                 
-                -- Determine key type
-                for _, kType in pairs({"square", "triangle", "circle"}) do
-                    if obj.Name:lower():find(kType) then
-                        keyType = kType
-                        break
-                    end
+                -- Check for specific key names
+                if objName:find("droppedkeytriangle") then
+                    keyType = "triangle"
+                elseif objName:find("droppedkeysquare") then
+                    keyType = "square"
+                elseif objName:find("droppedkeycircle") then
+                    keyType = "circle"
                 end
                 
                 -- Add to uncollected if player doesn't have this key type
@@ -1011,45 +1050,18 @@ Main:Button({
             end
         end
         
+        -- Teleport to the first uncollected key
         if #uncollectedKeys > 0 then
             local character = LocalPlayer.Character
             if character and character:FindFirstChild("HumanoidRootPart") then
                 character:PivotTo(uncollectedKeys[1]:GetPrimaryPartCFrame() + Vector3.new(0, 3, 0))
-            end
+                end
         else
             WindUI:Notify({
                 Title = "Get Dropped Keys",
                 Content = "You have all keys gang",
                 Duration = 3
             })
-        end
-    end
-})
-
-Main:Button({
-    Title = "Teleport to Exit Door",
-    Desc = "Teleports to the exit door once",
-    Callback = function()
-        local exitDoor = nil
-        
-        for _, obj in pairs(workspace:GetDescendants()) do
-            if obj.Name == "EXITDOOR" and obj:IsA("Model") and obj.PrimaryPart then
-                exitDoor = obj
-                break
-            end
-        end
-        
-        if exitDoor then
-            local character = LocalPlayer.Character
-            if character and character:FindFirstChild("HumanoidRootPart") then
-                character:PivotTo(exitDoor:GetPrimaryPartCFrame() + Vector3.new(0, 3, 0))
-                WindUI:Notify({
-                    Title = "Teleport to Exit Door",
-                    Content = "Teleported to exit door",
-                    Duration = 3
-                })
-            end
-        else
         end
     end
 })
@@ -2286,7 +2298,7 @@ Utility:Toggle({
 })
 
 local phantomDashEnabled = false
-local phantomDashCleanup = nil
+local phantomDashConnection = nil
 
 Utility:Toggle({
     Title = "No Cooldown Phantom Step",
@@ -2295,53 +2307,33 @@ Utility:Toggle({
     Callback = function(state)
         phantomDashEnabled = state
         if state then
-            -- Start the infinite dash system
-            local function InfinitePhantomDash()
-                local character = game.Players.LocalPlayer.Character or game.Players.LocalPlayer.CharacterAdded:Wait()
-                local dashCooldownConnection
+            -- Start the infinite dash system using Heartbeat
+            phantomDashConnection = RunService.Heartbeat:Connect(function()
+                if not phantomDashEnabled then return end
                 
-                local function removeCooldown()
-                    for _, child in ipairs(character:GetChildren()) do
-                        if child.Name == "CDDASHSTACKSCD" then
-                            child:Destroy()
-                        end
-                    end
-                end
-
-                -- Main handler
-                dashCooldownConnection = character.ChildAdded:Connect(function(child)
+                local character = LocalPlayer.Character
+                if not character then return end
+                
+                -- Remove any existing cooldown objects
+                for _, child in ipairs(character:GetChildren()) do
                     if child.Name == "CDDASHSTACKSCD" then
-                        removeCooldown()
-                    end
-                end)
-
-                -- Initial cleanup
-                removeCooldown()
-
-                -- Cleanup
-                return function()
-                    if dashCooldownConnection then
-                        dashCooldownConnection:Disconnect()
+                        child:Destroy()
                     end
                 end
-            end
-
-            phantomDashCleanup = InfinitePhantomDash()
+            end)
             
             -- Reapply on respawn
-            game.Players.LocalPlayer.CharacterAdded:Connect(function()
-                if phantomDashEnabled then
-                    if phantomDashCleanup then
-                        phantomDashCleanup()
-                    end
-                    phantomDashCleanup = InfinitePhantomDash()
+            LocalPlayer.CharacterAdded:Connect(function()
+                if phantomDashEnabled and phantomDashConnection then
+                    -- The Heartbeat connection will automatically handle the new character
+                    task.wait(0.5) -- Wait for character to fully load
                 end
             end)
         else
             -- Cleanup
-            if phantomDashCleanup then
-                phantomDashCleanup()
-                phantomDashCleanup = nil
+            if phantomDashConnection then
+                phantomDashConnection:Disconnect()
+                phantomDashConnection = nil
             end
         end
     end
