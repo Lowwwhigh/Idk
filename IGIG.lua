@@ -338,22 +338,11 @@ Main:Toggle({
             
             godmodeConnection = RunService.Heartbeat:Connect(function()
                 if godmodeEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    -- Use the complete RLGL position with 0.1 offset instead of current position
+                    -- Use the complete RLGL position with small offset
                     local targetCFrame = CFrame.new(-46, 1024, 110) + Vector3.new(0.1, 0.1, 0.1)
                     
-                    local args = {
-                        CFrame.new(
-                            targetCFrame.Position.X,
-                            targetCFrame.Position.Y,
-                            targetCFrame.Position.Z,
-                            targetCFrame.LookVector.X,
-                            targetCFrame.LookVector.Y,
-                            targetCFrame.LookVector.Z,
-                            targetCFrame.UpVector.X,
-                            targetCFrame.UpVector.Y,
-                            targetCFrame.UpVector.Z
-                        )
-                    }
+                    -- Send the complete CFrame, not individual components
+                    local args = {targetCFrame}
                     
                     pcall(function()
                         game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("rootCFrame"):FireServer(unpack(args))
