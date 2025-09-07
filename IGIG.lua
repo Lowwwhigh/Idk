@@ -607,6 +607,127 @@ Main:Toggle({
     end
 })
 
+-- Add this to the Glass Bridge section after the existing Glass Vision toggle
+
+local breakImmunityEnabled = false
+local breakImmunityCollisions = {}
+
+Main:Toggle({
+    Title = "Break Immunity",
+    Desc = "Prevents falling through breakable glass tiles",
+    Value = false,
+    Callback = function(state)
+        breakImmunityEnabled = state
+        if state then
+            -- Get the player's character
+            local character = LocalPlayer.Character
+            if not character then return end
+            
+            -- Find and destroy the PlayingGlassBridge object if it exists
+            local playingGlassBridge = character:FindFirstChild("PlayingGlassBridge")
+            if playingGlassBridge then
+                playingGlassBridge:Destroy()
+            end
+            
+            -- Create an invisible collision part for breakable tiles (separate from tile models)
+            local function setupBreakImmunity()
+                local glassHolder = workspace:FindFirstChild("GlassBridge") and workspace.GlassBridge:FindFirstChild("GlassHolder")
+                if not glassHolder then return end
+                
+                -- Clear existing collisions
+                for _, collision in pairs(breakImmunityCollisions) do
+                    if collision then
+                        collision:Destroy()
+                    end
+                end
+                table.clear(breakImmunityCollisions)
+                
+                -- Create collision folder if it doesn't exist
+                local collisionFolder = workspace:FindFirstChild("BreakImmunityCollisions")
+                if not collisionFolder then
+                    collisionFolder = Instance.new("Folder")
+                    collisionFolder.Name = "BreakImmunityCollisions"
+                    collisionFolder.Parent = workspace
+                end
+                
+                for _, tilePair in pairs(glassHolder:GetChildren()) do
+                    for _, tileModel in pairs(tilePair:GetChildren()) do
+                        if tileModel:IsA("Model") and tileModel.PrimaryPart then
+                            local isBreakable = tileModel.PrimaryPart:GetAttribute("exploitingisevil") == true
+                            
+                            if isBreakable then
+                                -- Create a new invisible collision part (separate from tile model)
+                                local collisionPart = Instance.new("Part")
+                                collisionPart.Name = "BreakImmunityCollision_" .. tileModel.Name
+                                collisionPart.Size = tileModel.PrimaryPart.Size
+                                collisionPart.Transparency = 1
+                                collisionPart.CanCollide = true
+                                collisionPart.Anchored = true
+                                collisionPart.CFrame = tileModel.PrimaryPart.CFrame
+                                collisionPart.Parent = collisionFolder
+                                
+                                -- Store reference for cleanup
+                                table.insert(breakImmunityCollisions, collisionPart)
+                            end
+                        end
+                    end
+                end
+            end
+            
+            -- Run immediately and set up connections for new tiles
+            setupBreakImmunity()
+            
+            -- Monitor for new glass tiles being added
+            glassESPConnections.breakImmunity = workspace.DescendantAdded:Connect(function(descendant)
+                if descendant.Name == "GlassBridge" or (descendant.Parent and descendant.Parent.Name == "GlassHolder") then
+                    task.wait(0.1) -- Small delay to ensure tile is fully loaded
+                    if breakImmunityEnabled then
+                        setupBreakImmunity()
+                    end
+                end
+            end)
+            
+            -- Also monitor for character changes
+            glassESPConnections.characterAdded = LocalPlayer.CharacterAdded:Connect(function(newCharacter)
+                task.wait(0.5) -- Wait for character to fully load
+                
+                if breakImmunityEnabled then
+                    -- Re-destroy PlayingGlassBridge if it reappears
+                    local newPlayingGlassBridge = newCharacter:FindFirstChild("PlayingGlassBridge")
+                    if newPlayingGlassBridge then
+                        newPlayingGlassBridge:Destroy()
+                    end
+                end
+            end)
+        else
+            -- Clean up when toggle is turned off
+            if glassESPConnections.breakImmunity then
+                glassESPConnections.breakImmunity:Disconnect()
+                glassESPConnections.breakImmunity = nil
+            end
+            
+            if glassESPConnections.characterAdded then
+                glassESPConnections.characterAdded:Disconnect()
+                glassESPConnections.characterAdded = nil
+            end
+            
+            -- Remove all collision parts
+            for _, collision in pairs(breakImmunityCollisions) do
+                if collision and collision.Parent then
+                    collision:Destroy()
+                end
+            end
+            table.clear(breakImmunityCollisions)
+            
+            -- Remove the collision folder if empty
+            local collisionFolder = workspace:FindFirstChild("BreakImmunityCollisions")
+            if collisionFolder and #collisionFolder:GetChildren() == 0 then
+                collisionFolder:Destroy()
+            end
+        end
+    end
+})
+
 Main:Button({
     Title = "Teleport to End of Bridge",
     Desc = "Instantly completes the glass bridge",
@@ -1360,111 +1481,6 @@ Main:Button({
 
 Combat:Section({Title = "Combat"})
 Combat:Divider()
-
-Combat:Section({Title = "Reach"})
-Combat:Divider()
-
-local reachEnabled = false
-local reachConnection = nil
-local reachDistance = 5
-local reachHookFunction = nil
-
-Combat:Slider({
-    Title = "Reach Distance",
-    Value = {
-        Min = 1,
-        Max = 20,
-        Default = 5,
-    },
-    Callback = function(value)
-        reachDistance = value
-    end
-})
-
-Combat:Toggle({
-    Title = "Reach",
-    Desc = "Teleports to all nearest players within reach distance",
-    Value = false,
-    Callback = function(state)
-        reachEnabled = state
-        if state then
-            -- Hook metamethod to allow rootCFrame calls for reach
-            reachHookFunction = hookmetamethod(game, "__namecall", newcclosure(function(self, ...)
-                local method = getnamecallmethod()
-                local args = {...}
-                
-                -- Allow our reach calls to go through
-                if method == "FireServer" and self.Name == "rootCFrame" and reachEnabled then
-                    return reachHookFunction(self, ...)
-                end
-                
-                return reachHookFunction(self, ...)
-            end))
-            
-            -- Start reach system
-            reachConnection = RunService.Heartbeat:Connect(function()
-                if reachEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    local myRoot = LocalPlayer.Character.HumanoidRootPart
-                    local targetPlayers = {}
-                    
-                    -- Find all players within reach distance
-                    for _, player in ipairs(Players:GetPlayers()) do
-                        if player ~= LocalPlayer and player.Character and player.Character:FindFirstChild("HumanoidRootPart") then
-                            local distance = (player.Character.HumanoidRootPart.Position - myRoot.Position).Magnitude
-                            if distance <= reachDistance then
-                                table.insert(targetPlayers, {player = player, distance = distance})
-                            end
-                        end
-                    end
-                    
-                    -- Sort by distance (closest first)
-                    table.sort(targetPlayers, function(a, b)
-                        return a.distance < b.distance
-                    end)
-                    
-                    -- Teleport to each target player rapidly
-                    for _, target in ipairs(targetPlayers) do
-                        if target.player.Character and target.player.Character:FindFirstChild("HumanoidRootPart") then
-                            local targetRoot = target.player.Character.HumanoidRootPart
-                            
-                            local args = {
-                                targetRoot.CFrame
-                            }
-                            
-                            pcall(function()
-                                game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("rootCFrame"):FireServer(unpack(args))
-                            end)
-                        end
-                    end
-                end
-            end)
-            
-            WindUI:Notify({
-                Title = "Reach",
-                Content = "Multi-Reach enabled - Distance: " .. reachDistance,
-                Duration = 3
-            })
-        else
-            -- Cleanup
-            if reachConnection then
-                reachConnection:Disconnect()
-                reachConnection = nil
-            end
-            
-            -- Restore original hook if it exists
-            if reachHookFunction then
-                hookmetamethod(game, "__namecall", reachHookFunction)
-                reachHookFunction = nil
-            end
-            
-            WindUI:Notify({
-                Title = "Reach",
-                Content = "Multi-Reach disabled",
-                Duration = 3
-            })
-        end
-    end
-})
 
 
 local function IsGuard(model)
