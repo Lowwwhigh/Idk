@@ -93,7 +93,7 @@ local UL = MainSection:Tab({
 
 UL:Paragraph({
     Title = "CHANGELOGS V7.5",
-    Desc = "[~] Added Back RLGL Godmode (No ban) Muahha\n[+] Added Get Dropped Keys in Hide and Seek\n[+] Added Teleport to Exit Door in Hide and Seek\n[+] Added Get VIP toggle in Utility\n[+] Added Can Spectate toggle in Utility\n[+] Added Get Parkour Slide in Utility\n[~] Changed Phantom Step to toggle\n[+] Added Always Can Revive in Utility\n[+] Added Get Lighter in Dalgona",
+    Desc = "[~] Added Back RLGL Godmode (No ban) Muahha\n[+] Added Get Dropped Keys in Hide and Seek\n[+] Added Teleport to Exit Door in Hide and Seek\n[+] Added Get VIP toggle in Utility\n[+] Added Can Spectate toggle in Utility\n[+] Added Get Parkour Slide in Utility\n[~] Changed Phantom Step to toggle\n[+] Added Always Can Revive in Utility\n[+] Added Get Lighter in Dalgona\n[~] Fixed Complete Dalgona",
     Image = "rbxassetid://130506306640152",
 })
 
@@ -108,10 +108,11 @@ local Main = GameSection:Tab({
     ShowTabTitle = true,
 })
 
-local Peabert = GameSection:Tab({
-    Title = "Peabert",
-    Icon = "gift",
+local Visual = GameSection:Tab({
+    Title = "Visual",
+    Icon = "eye",
     ShowTabTitle = true,
+    Locked = false
 })
 
 local Utility = GameSection:Tab({
@@ -131,12 +132,10 @@ local Combat = GameSection:Tab({
     Icon = "crosshair",
     ShowTabTitle = true,
 })
-
-local Visual = GameSection:Tab({
-    Title = "Visual",
-    Icon = "eye",
+local Peabert = GameSection:Tab({
+    Title = "Peabert",
+    Icon = "gift",
     ShowTabTitle = true,
-    Locked = false
 })
 
 Window:SelectTab(1)
@@ -747,8 +746,8 @@ local autoChokeholdEnabled = false
 local chokeholdConnection
 
 Main:Toggle({
-    Title = "Auto Power-Hold",
-    Desc = "Automatically completes powerhold QTEs",
+    Title = "Auto Choke [ Works you just dont see it ]",
+    Desc = "Automatically completes chokehold QTEs",
     Value = false,
     Callback = function(state)
         autoChokeholdEnabled = state
@@ -806,64 +805,28 @@ local completeDalgonaEnabled = false
 local dalgonaHooked = false
 
 Main:Toggle({
-    Title = "Complete Dalgona [Patched Or Not Idk]",
+    Title = "Complete Dalgona",
     Desc = "Automatically completes the Dalgona candy (no lag)",
     Value = false,
     Callback = function(state)
         completeDalgonaEnabled = state
         
-        -- Show notification only when toggled on
         if state then
             WindUI:Notify({
                 Title = "Complete Dalgona",
-                Content = "If it doesn't work your executor is bad",
+                Content = "Works every executor",
                 Duration = 5
             })
-        end
-        
-        if state then
-            -- Hook the Dalgona progress function
-            local function HookDalgona()
-                local DalgonaClientModule = game.ReplicatedStorage.Modules.Games.DalgonaClient
-                if not DalgonaClientModule then return end
-                
-                -- Find the RenderStepped function with the progress variables
-                for _, func in ipairs(getgc()) do
-                    if typeof(func) == "function" and islclosure(func) and getfenv(func).script == DalgonaClientModule then
-                        local info = debug.getinfo(func)
-                        if info.nups > 50 then -- The main RenderStepped function
-                            -- Find v_u_107 (progress counter) and set it to complete
-                            for i = 1, info.nups do
-                                local name, value = debug.getupvalue(func, i)
-                                if typeof(value) == "number" and value >= 0 and value < 200 then
-                                    -- Find v_u_106 (total required)
-                                    for j = 1, info.nups do
-                                        local name2, value2 = debug.getupvalue(func, j)
-                                        if typeof(value2) == "number" and value2 > value and value2 < 500 then
-                                            debug.setupvalue(func, i, value2 - 5)
-                                            dalgonaHooked = true
-                                            return true
-                                        end
-                                    end
-                                end
-                            end
-                            break
-                        end
-                    end
-                end
-                return false
-            end
             
-            -- Try to hook immediately
-            if not HookDalgona() then
-                -- If not successful, try again after a short delay
-                task.spawn(function()
-                    task.wait(1)
-                    HookDalgona()
-                end)
-            end
+            pcall(function()
+                local args = {
+                    {
+                        Completed = true
+                    }
+                }
+                game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("DALGONATEMPREMPTE"):FireServer(unpack(args))
+            end)
         else
-            -- Cleanup
             dalgonaHooked = false
         end
     end
@@ -968,7 +931,7 @@ Main:Button({
 -- Update the Teleport to Exit Door button
 Main:Button({
     Title = "Teleport to Exit Door",
-    Desc = "Teleports to the exit door once",
+    Desc = "Teleports to the exit door",
     Callback = function()
         -- Find the exit door in workspace
         local exitDoor = nil
@@ -984,10 +947,10 @@ Main:Button({
         if exitDoor then
             local character = LocalPlayer.Character
             if character and character:FindFirstChild("HumanoidRootPart") then
-                -- Get position 3 studs in front of the door
+                -- Get position 3 studs to the side of the door
                 local doorCFrame = exitDoor:GetPrimaryPartCFrame()
-                local positionInFront = doorCFrame.Position + (doorCFrame.LookVector * 3)
-                local targetCFrame = CFrame.new(positionInFront, doorCFrame.Position)
+                local positionToSide = doorCFrame.Position + (doorCFrame.RightVector * 3)
+                local targetCFrame = CFrame.new(positionToSide, doorCFrame.Position)
                 
                 character:PivotTo(targetCFrame)
                 WindUI:Notify({
@@ -1001,29 +964,26 @@ Main:Button({
     end
 })
 
--- Update the Get Dropped Keys button
+-- Update the Get Dropped Keys button with CurrentKeys folder
 Main:Button({
     Title = "Get Dropped Keys",
-    Desc = "Teleports to keys you haven't collected yet",
+    Desc = "Teleports to keys",
     Callback = function()
         -- Get the player's collected keys
         local collectedKeys = {}
         local player = game.Players.LocalPlayer
         
-        -- Look for collected keys folder in player
-        for _, child in pairs(player:GetChildren()) do
-            local lowerName = child.Name:lower()
-            if (lowerName:find("^collected") or lowerName:find("^keys")) and child:IsA("Folder") then
-                -- Check for square, triangle, circle folders
-                for _, keyType in pairs(child:GetChildren()) do
-                    if keyType:IsA("Folder") then
-                        local keyTypeName = keyType.Name:lower()
-                        if keyTypeName == "square" or keyTypeName == "triangle" or keyTypeName == "circle" then
-                            collectedKeys[keyTypeName] = true
-                        end
+        -- Look for CurrentKeys folder in player
+        local currentKeysFolder = player:FindFirstChild("CurrentKeys")
+        if currentKeysFolder and currentKeysFolder:IsA("Folder") then
+            -- Check for square, triangle, circle folders
+            for _, keyType in pairs(currentKeysFolder:GetChildren()) do
+                if keyType:IsA("Folder") then
+                    local keyTypeName = keyType.Name:lower()
+                    if keyTypeName == "square" or keyTypeName == "triangle" or keyTypeName == "circle" then
+                        collectedKeys[keyTypeName] = true
                     end
                 end
-                break -- Found the folder, no need to continue
             end
         end
         
@@ -1055,11 +1015,11 @@ Main:Button({
             local character = LocalPlayer.Character
             if character and character:FindFirstChild("HumanoidRootPart") then
                 character:PivotTo(uncollectedKeys[1]:GetPrimaryPartCFrame() + Vector3.new(0, 3, 0))
-                end
+            end
         else
             WindUI:Notify({
                 Title = "Get Dropped Keys",
-                Content = "You have all keys gang",
+                Content = "You have all keys gng",
                 Duration = 3
             })
         end
