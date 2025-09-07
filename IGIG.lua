@@ -316,6 +316,7 @@ Main:Button({
 local godmodeEnabled = false
 local godmodeConnection = nil
 local originalHookFunction = nil
+local safeFolderCheckConnection = nil
 
 Main:Toggle({
     Title = "Godmode",
@@ -337,15 +338,28 @@ Main:Toggle({
                 end))
             end
             
+            -- Function to check for SafeRedLightGreenLight folder
+            local function checkSafeFolder()
+                local character = LocalPlayer.Character
+                if not character then return true end
+                
+                return character:FindFirstChild("SafeRedLightGreenLight") ~= nil
+            end
+            
             godmodeConnection = RunService.Heartbeat:Connect(function()
                 if godmodeEnabled and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    -- Check if safe folder exists - if it does, disable godmode temporarily
+                    if checkSafeFolder() then
+                        return
+                    end
+                    
                     local currentCFrame = LocalPlayer.Character.HumanoidRootPart.CFrame
                     
                     local args = {
                         CFrame.new(
-                            currentCFrame.Position.X + 1,
-                            currentCFrame.Position.Y + 1,
-                            currentCFrame.Position.Z + 1,
+                            currentCFrame.Position.X + 0.1,
+                            currentCFrame.Position.Y + 0.1,
+                            currentCFrame.Position.Z + 0.1,
                             currentCFrame.LookVector.X,
                             currentCFrame.LookVector.Y,
                             currentCFrame.LookVector.Z,
@@ -361,6 +375,19 @@ Main:Toggle({
                 end
             end)
             
+            -- Monitor for SafeRedLightGreenLight folder changes
+            safeFolderCheckConnection = RunService.Heartbeat:Connect(function()
+                if not godmodeEnabled then return end
+                
+                local character = LocalPlayer.Character
+                if character then
+                    local safeFolder = character:FindFirstChild("SafeRedLightGreenLight")
+                    if safeFolder then
+                        -- Safe folder exists, godmode is automatically disabled by the check above
+                    end
+                end
+            end)
+            
             WindUI:Notify({
                 Title = "RLGL",
                 Content = "Godmode enabled turn this off after Rlgl",
@@ -372,7 +399,10 @@ Main:Toggle({
                 godmodeConnection = nil
             end
             
-            
+            if safeFolderCheckConnection then
+                safeFolderCheckConnection:Disconnect()
+                safeFolderCheckConnection = nil
+            end
         end
     end
 })
@@ -2238,6 +2268,71 @@ Utility:Toggle({
         pcall(function()
             workspace.Values.CanSpectateIfWonGame.Value = state
         end)
+    end
+})
+local customTagInput = ""
+local applyTagEnabled = false
+local tagApplyConnection = nil
+
+Utility:Input({
+    Title = "Custom Player Tag",
+    Desc = "Enter custom tag text",
+    Value = "",
+    Placeholder = "Enter tag text",
+    Callback = function(text)
+        customTagInput = text
+    end
+})
+
+Utility:Toggle({
+    Title = "Apply Tag",
+    Desc = "Applies custom player tag",
+    Value = false,
+    Callback = function(state)
+        applyTagEnabled = state
+        
+        if state then
+            -- Function to apply the tag
+            local function applyPlayerTag()
+                if not applyTagEnabled or customTagInput == "" then return end
+                
+                local player = game:GetService("Players").LocalPlayer
+                
+                local tagValue = player:FindFirstChild("PlayerTagValue")
+                tagValue.Value = customTagInput
+                
+                -- Update character tags if character exists
+                if player.Character then
+                    local frontTag = player.Character:FindFirstChild("PlayerTags") and player.Character.PlayerTags:FindFirstChild("Front")
+                    local backTag = player.Character:FindFirstChild("PlayerTags") and player.Character.PlayerTags:FindFirstChild("Back")
+                    
+                    if frontTag and frontTag:FindFirstChild("SurfaceGui") and frontTag.SurfaceGui:FindFirstChild("TextLabel") then
+                        frontTag.SurfaceGui.TextLabel.Text = customTagInput
+                    end
+                    
+                    if backTag and backTag:FindFirstChild("SurfaceGui") and backTag.SurfaceGui:FindFirstChild("TextLabel") then
+                        backTag.SurfaceGui.TextLabel.Text = customTagInput
+                    end
+                end
+            end
+            
+            -- Apply immediately
+            applyPlayerTag()
+            
+            -- Set up connection to reapply when character changes
+            tagApplyConnection = player.CharacterAdded:Connect(function(character)
+                task.wait(0.5) -- Wait for character to fully load
+                if applyTagEnabled then
+                    applyPlayerTag()
+                end
+            end)
+        else
+            -- Clean up
+            if tagApplyConnection then
+                tagApplyConnection:Disconnect()
+                tagApplyConnection = nil
+            end
+        end
     end
 })
 
