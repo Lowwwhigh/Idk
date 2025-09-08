@@ -1,23 +1,5 @@
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-local correctGameIds = {
-    125009265613167,
-    122816944483266
-}
-local isCorrectGame = false
-for _, id in ipairs(correctGameIds) do
-    if game.PlaceId == id then
-        isCorrectGame = true
-        break
-    end
-end
-if not isCorrectGame then
-    WindUI:Notify({
-        Title = "Only InGame",
-        Content = "This script only works ingame.",
-        Duration = 10
-    })
-    return
-end
+
 local Players = game:GetService("Players")
 local LocalPlayer = Players.LocalPlayer
 local Camera = workspace.CurrentCamera
@@ -25,7 +7,9 @@ local RunService = game:GetService("RunService")
 local Workspace = game:GetService("Workspace")
 local ReplicatedStorage = game:GetService("ReplicatedStorage")
 local CoreGui = game:GetService("CoreGui")
-
+local UserInputService = game:GetService("UserInputService")
+local camera = Workspace.CurrentCamera
+local player = Players.LocalPlayer
 
 local aimbotLerpFactor = 0.3
 local glassESPEnabled = false
@@ -93,7 +77,7 @@ local UL = MainSection:Tab({
 
 UL:Paragraph({
     Title = "CHANGELOGS V7.5",
-    Desc = "[~] Added Back RLGL Godmode (No ban) Muahha\n[+] Added Get Dropped Keys in Hide and Seek\n[+] Added Teleport to Exit Door in Hide and Seek\n[+] Added Get VIP toggle in Utility\n[+] Added Can Spectate toggle in Utility\n[+] Added Get Parkour Slide in Utility\n[~] Changed Phantom Step to toggle\n[+] Added Always Can Revive in Utility\n[+] Added Get Lighter in Dalgona\n[~] Fixed Complete Dalgona\n[+] Added Custom Player Tag\n",
+    Desc = "[~] Added Back RLGL Godmode\n[+] Added Get Dropped Keys in Hide and Seek\n[+] Added Teleport to Exit Door in Hide and Seek\n[+] Added Get VIP toggle in Utility\n[+] Added Can Spectate toggle in Utility\n[+] Added Get Parkour Slide in Utility\n[~] Changed Phantom Step to toggle\n[+] Added Always Can Revive in Utility\n[+] Added Get Lighter in Dalgona\n[+] Added Custom Player Tag\n[~] Moved Anti-Fling to Misc\n[~] Moved Fling Aura to Combat Tab\n[-] Deleted Mingle Auto Choke\n[+] Added Auto QTE (like Mingle , Sky Squid)\n[+] Added Inf Stamina + Auto Climb in Sky Squid Game\n[~] Moved Both Anti Banana and Auto Collect Bandage",
     Image = "rbxassetid://130506306640152",
 })
 
@@ -183,119 +167,58 @@ Discord:Paragraph({
 })
 
 
-Main:Section({Title = "OP"})
+Main:Section({Title = "Universal"})
 Main:Divider()
 
-local touchFlingEnabled = false
-local touchFlingConnection = nil
-local touchFlingAntiCheatHook = nil
+local autoqteEnabled = false
+local qteConnection
 
 Main:Toggle({
-    Title = "Fling Aura",
-    Desc = "Fling other players when they touch you",
+    Title = "Auto QTE [ Works you just dont see it ]",
+    Desc = "Automatically completes QTEs (like Mingle , Sky Squid Game)",
     Value = false,
     Callback = function(state)
-        touchFlingEnabled = state
+        autoqteEnabled = state
         if state then
-            local function FlingPlayer()
+            local function AutoQTE()
                 local Players = game:GetService("Players")
                 local LocalPlayer = Players.LocalPlayer
-                local Character = LocalPlayer.Character
-                local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
-                local RunService = game:GetService("RunService")
-
-                if not HumanoidRootPart then return end
-
-                local velocityConnections = getconnections(HumanoidRootPart:GetPropertyChangedSignal("Velocity"))
-                for _, connection in ipairs(velocityConnections) do
-                    connection:Disable()
-                end
-
-                local flingActive = true
-                local flingConnection = RunService.RenderStepped:Connect(function()
-                    if not flingActive or not HumanoidRootPart or not HumanoidRootPart.Parent then
-                        flingConnection:Disconnect()
-                        return
-                    end
-
-                    local currentVelocity = HumanoidRootPart.Velocity
-                    HumanoidRootPart.Velocity = currentVelocity * 1000 + Vector3.new(0, 10000, 0)
-                    
-                    RunService.RenderStepped:Wait()
-                    if HumanoidRootPart.Parent then
-                        HumanoidRootPart.Velocity = currentVelocity
-                    end
-
-                    RunService.Stepped:Wait()
-                    if HumanoidRootPart.Parent then
-                        local nudgeDirection = ((math.floor(tick()) % 2 == 0) and 1 or -1)
-                        HumanoidRootPart.Velocity = currentVelocity + Vector3.new(0, 0.1 * nudgeDirection, 0)
-                    end
-                end)
-
-                return function()
-                    flingActive = false
-                    if flingConnection then flingConnection:Disconnect() end
-                    for _, connection in ipairs(velocityConnections) do
-                        connection:Enable()
-                    end
-                end
-            end
-
-            touchFlingConnection = FlingPlayer()
-            
-            LocalPlayer.CharacterAdded:Connect(function()
-                if touchFlingEnabled then
-                    if touchFlingConnection then
-                        touchFlingConnection()
-                    end
-                    touchFlingConnection = FlingPlayer()
-                end
-            end)
-        else
-            if touchFlingConnection then
-                touchFlingConnection()
-                touchFlingConnection = nil
-            end
-        end
-    end
-})
-
-
-local antiFlingEnabled = false
-local antiFlingConnection
-Main:Toggle({
-    Title = "Anti-Fling",
-    Desc = "Stops other players from flinging you",
-    Value = false,
-    Callback = function(state)
-        antiFlingEnabled = state
-        if state then
-            antiFlingConnection = RunService.RenderStepped:Connect(function()
-                pcall(function()
-                    local character = LocalPlayer.Character
-                    if character then
-                        local hrp = character:FindFirstChild("HumanoidRootPart")
-                        local humanoid = character:FindFirstChildOfClass("Humanoid")
-                        
-                        if hrp and humanoid then
-                            
-                            local currentVel = hrp.Velocity
-                            hrp.Velocity = Vector3.new(currentVel.X * 0.5, currentVel.Y, currentVel.Z * 0.5)
-                            hrp.RotVelocity = Vector3.new(0, 0, 0)
-                            
-                            
-                            if currentVel.Magnitude > 100 and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping then
-                                hrp.Velocity = Vector3.new(currentVel.X * 0.3, currentVel.Y, currentVel.Z * 0.3)
+                local Remotes = game:GetService("ReplicatedStorage").Remotes
+                
+                local remoteConnection
+                local function handleRemote(remote)
+                    if remote.Name == "RemoteForQTE" then
+                        task.spawn(function()
+                            while remote and remote.Parent do
+                                if autoqteEnabled then
+                                    remote:FireServer()
+                                end
                             end
-                        end
+                        end)
+                    end
+                end
+
+                -- Hook new remotes
+                remoteConnection = LocalPlayer.CharacterAdded:Connect(function(char)
+                    char.ChildAdded:Connect(handleRemote)
+                    for _, child in ipairs(char:GetChildren()) do
+                        handleRemote(child)
                     end
                 end)
-            end)
+
+                -- Cleanup function
+                return function()
+                    if remoteConnection then
+                        remoteConnection:Disconnect()
+                    end
+                end
+            end
+
+            qteConnection = AutoQTE()
         else
-            if antiFlingConnection then
-                antiFlingConnection:Disconnect()
-                antiFlingConnection = nil
+            if qteConnection then
+                qteConnection()
+                qteConnection = nil
             end
         end
     end
@@ -725,66 +648,6 @@ Main:Button({
     end
 })
 
-Main:Section({Title = "Mingle"})
-Main:Divider()
-
-
-local autoChokeholdEnabled = false
-local chokeholdConnection
-
-Main:Toggle({
-    Title = "Auto Choke [ Works you just dont see it ]",
-    Desc = "Automatically completes chokehold QTEs",
-    Value = false,
-    Callback = function(state)
-        autoChokeholdEnabled = state
-        if state then
-            local function AutoPowerHold()
-                local Players = game:GetService("Players")
-                local LocalPlayer = Players.LocalPlayer
-                local Remotes = game:GetService("ReplicatedStorage").Remotes
-                
-                local remoteConnection
-                local function handleRemote(remote)
-                    if remote.Name == "RemoteForQTE" then
-                        task.spawn(function()
-                            while remote and remote.Parent do
-                                if autoChokeholdEnabled then
-                                    remote:FireServer() -- Simulates button hold
-                                end
-                                task.wait(0.5) -- QTE interval
-                            end
-                        end)
-                    end
-                end
-
-                -- Hook new remotes
-                remoteConnection = LocalPlayer.CharacterAdded:Connect(function(char)
-                    char.ChildAdded:Connect(handleRemote)
-                    for _, child in ipairs(char:GetChildren()) do
-                        handleRemote(child)
-                    end
-                end)
-
-                -- Cleanup function
-                return function()
-                    if remoteConnection then
-                        remoteConnection:Disconnect()
-                    end
-                end
-            end
-
-            chokeholdConnection = AutoPowerHold()
-        else
-            if chokeholdConnection then
-                chokeholdConnection()
-                chokeholdConnection = nil
-            end
-        end
-    end
-})
-
-
 Main:Section({Title = "Dalgona"})
 Main:Divider()
 
@@ -792,7 +655,7 @@ local completeDalgonaEnabled = false
 local dalgonaHooked = false
 
 Main:Toggle({
-    Title = "Complete Dalgona",
+    Title = "Complete Dalgona [Do Not Use For Now]",
     Desc = "Automatically completes the Dalgona candy (no lag)",
     Value = false,
     Callback = function(state)
@@ -1419,105 +1282,61 @@ Main:Toggle({
     end
 })
 
-Main:Section({Title = "Other"})
-Main:Divider()
+local infStaminaEnabled = false
+local infStaminaConnection = nil
+local autoClimbEnabled = false
+local autoClimbConnection = nil
 
-local collectBandageEnabled = false
-local collectBandageConnection = nil
-
-local function HasTool(toolName)
-    -- Check character and backpack for the tool
-    for _, v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
-        if v:IsA("Tool") and v.Name == toolName then
-            return true
-        end
-    end
-    for _, v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
-        if v:IsA("Tool") and v.Name == toolName then
-            return true
-        end
-    end
-    return false
-end
-
-local function CollectBandageLoop()
-    while collectBandageEnabled do
-        local OldCFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
-        if not HasTool("Bandage") then
-            repeat
-                task.wait()
-                if workspace:FindFirstChild("Effects") then
-                    for _, v in pairs(workspace.Effects:GetChildren()) do
-                        if v.Name == "DroppedBandage" and v:FindFirstChild("Handle") then
-                            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = v.Handle.CFrame
-                            break
+Main:Toggle({
+    Title = "Inf Stamina + Auto Climb",
+    Desc = "Infinite stamina and automatic climbing",
+    Value = false,
+    Callback = function(state)
+        infStaminaEnabled = state
+        autoClimbEnabled = state
+        
+        if state then
+            -- Infinite Stamina
+            infStaminaConnection = RunService.Heartbeat:Connect(function()
+                pcall(function()
+                    local character = LocalPlayer.Character
+                    if character then
+                        local stamina = character:FindFirstChild("CurrentStaminaNumberValue")
+                        if stamina then
+                            stamina.Value = 1
                         end
                     end
-                end
-            until HasTool("Bandage") or not collectBandageEnabled
-            task.wait(0.3)
-            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrame
-        end
-        task.wait()
-    end
-end
-
-Main:Toggle({
-    Title = "Auto Collect Bandage",
-    Desc = "Automatically collects bandages",
-    Value = false,
-    Callback = function(state)
-        collectBandageEnabled = state
-        if state then
-            if collectBandageConnection then
-                collectBandageConnection:Disconnect()
-            end
-            collectBandageConnection = task.spawn(CollectBandageLoop)
+                end)
+            end)
+            
+            -- Auto Climb
+            autoClimbConnection = RunService.Heartbeat:Connect(function()
+                pcall(function()
+                    local args = {
+                        {
+                            ClimbingUp = true
+                        }
+                    }
+                    game:GetService("ReplicatedStorage"):WaitForChild("Remotes"):WaitForChild("TemporaryReachedBindable"):FireServer(unpack(args))
+                end)
+            end)
         else
-            if collectBandageConnection then
-                task.cancel(collectBandageConnection)
-                collectBandageConnection = nil
+            -- Clean up connections
+            if infStaminaConnection then
+                infStaminaConnection:Disconnect()
+                infStaminaConnection = nil
+            end
+            
+            if autoClimbConnection then
+                autoClimbConnection:Disconnect()
+                autoClimbConnection = nil
             end
         end
     end
 })
 
--- Add Anti Banana toggle
-local antiBananaEnabled = false
-local antiBananaConnection = nil
-
-local function AntiBananaLoop()
-    while antiBananaEnabled do
-        if workspace:FindFirstChild("Effects") then
-            for _, v in pairs(workspace.Effects:GetChildren()) do
-                if v.Name:find("Banana") then
-                    v:Destroy()
-                end
-            end
-        end
-        task.wait()
-    end
-end
-
-Main:Toggle({
-    Title = "Anti Banana",
-    Desc = "Automatically removes bananas",
-    Value = false,
-    Callback = function(state)
-        antiBananaEnabled = state
-        if state then
-            if antiBananaConnection then
-                antiBananaConnection:Disconnect()
-            end
-            antiBananaConnection = task.spawn(AntiBananaLoop)
-        else
-            if antiBananaConnection then
-                task.cancel(antiBananaConnection)
-                antiBananaConnection = nil
-            end
-        end
-    end
-})
+Main:Section({Title = "Other"})
+Main:Divider()
 
 Main:Button({
     Title = "Unlock Dash",
@@ -1599,6 +1418,81 @@ end)
 
 Combat:Section({Title = "Risky Features"})
 Combat:Divider()
+
+local touchFlingEnabled = false
+local touchFlingConnection = nil
+local touchFlingAntiCheatHook = nil
+
+Combat:Toggle({
+    Title = "Fling Aura (Not Bannable/Risky)",
+    Desc = "Fling other players when they touch you",
+    Value = false,
+    Callback = function(state)
+        touchFlingEnabled = state
+        if state then
+            local function FlingPlayer()
+                local Players = game:GetService("Players")
+                local LocalPlayer = Players.LocalPlayer
+                local Character = LocalPlayer.Character
+                local HumanoidRootPart = Character and Character:FindFirstChild("HumanoidRootPart")
+                local RunService = game:GetService("RunService")
+
+                if not HumanoidRootPart then return end
+
+                local velocityConnections = getconnections(HumanoidRootPart:GetPropertyChangedSignal("Velocity"))
+                for _, connection in ipairs(velocityConnections) do
+                    connection:Disable()
+                end
+
+                local flingActive = true
+                local flingConnection = RunService.RenderStepped:Connect(function()
+                    if not flingActive or not HumanoidRootPart or not HumanoidRootPart.Parent then
+                        flingConnection:Disconnect()
+                        return
+                    end
+
+                    local currentVelocity = HumanoidRootPart.Velocity
+                    HumanoidRootPart.Velocity = currentVelocity * 1000 + Vector3.new(0, 10000, 0)
+                    
+                    RunService.RenderStepped:Wait()
+                    if HumanoidRootPart.Parent then
+                        HumanoidRootPart.Velocity = currentVelocity
+                    end
+
+                    RunService.Stepped:Wait()
+                    if HumanoidRootPart.Parent then
+                        local nudgeDirection = ((math.floor(tick()) % 2 == 0) and 1 or -1)
+                        HumanoidRootPart.Velocity = currentVelocity + Vector3.new(0, 0.1 * nudgeDirection, 0)
+                    end
+                end)
+
+                return function()
+                    flingActive = false
+                    if flingConnection then flingConnection:Disconnect() end
+                    for _, connection in ipairs(velocityConnections) do
+                        connection:Enable()
+                    end
+                end
+            end
+
+            touchFlingConnection = FlingPlayer()
+            
+            LocalPlayer.CharacterAdded:Connect(function()
+                if touchFlingEnabled then
+                    if touchFlingConnection then
+                        touchFlingConnection()
+                    end
+                    touchFlingConnection = FlingPlayer()
+                end
+            end)
+        else
+            if touchFlingConnection then
+                touchFlingConnection()
+                touchFlingConnection = nil
+            end
+        end
+    end
+})
 
 Combat:Toggle({
     Title = "Bring Guards",
@@ -2504,9 +2398,106 @@ Utility:Button({
     end
 })
 
+local collectBandageEnabled = false
+local collectBandageConnection = nil
+
+local function HasTool(toolName)
+    -- Check character and backpack for the tool
+    for _, v in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
+        if v:IsA("Tool") and v.Name == toolName then
+            return true
+        end
+    end
+    for _, v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+        if v:IsA("Tool") and v.Name == toolName then
+            return true
+        end
+    end
+    return false
+end
+
+local function CollectBandageLoop()
+    while collectBandageEnabled do
+        local OldCFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
+        if not HasTool("Bandage") then
+            repeat
+                task.wait()
+                if workspace:FindFirstChild("Effects") then
+                    for _, v in pairs(workspace.Effects:GetChildren()) do
+                        if v.Name == "DroppedBandage" and v:FindFirstChild("Handle") then
+                            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = v.Handle.CFrame
+                            break
+                        end
+                    end
+                end
+            until HasTool("Bandage") or not collectBandageEnabled
+            task.wait(0.3)
+            game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame = OldCFrame
+        end
+        task.wait()
+    end
+end
+
+Utility:Toggle({
+    Title = "Auto Collect Bandage",
+    Desc = "Automatically collects bandages",
+    Value = false,
+    Callback = function(state)
+        collectBandageEnabled = state
+        if state then
+            if collectBandageConnection then
+                collectBandageConnection:Disconnect()
+            end
+            collectBandageConnection = task.spawn(CollectBandageLoop)
+        else
+            if collectBandageConnection then
+                task.cancel(collectBandageConnection)
+                collectBandageConnection = nil
+            end
+        end
+    end
+})
+
+-- Add Anti Banana toggle
+local antiBananaEnabled = false
+local antiBananaConnection = nil
+
+local function AntiBananaLoop()
+    while antiBananaEnabled do
+        if workspace:FindFirstChild("Effects") then
+            for _, v in pairs(workspace.Effects:GetChildren()) do
+                if v.Name:find("Banana") then
+                    v:Destroy()
+                end
+            end
+        end
+        task.wait()
+    end
+end
+
+Utility:Toggle({
+    Title = "Anti Banana",
+    Desc = "Removes bananas",
+    Value = false,
+    Callback = function(state)
+        antiBananaEnabled = state
+        if state then
+            if antiBananaConnection then
+                antiBananaConnection:Disconnect()
+            end
+            antiBananaConnection = task.spawn(AntiBananaLoop)
+        else
+            if antiBananaConnection then
+                task.cancel(antiBananaConnection)
+                antiBananaConnection = nil
+            end
+        end
+    end
+})
+
 Utility:Toggle({
     Title = "Auto Skip Cutscenes",
-    Desc = "Automatically skips all cutscenes and dialogue",
+    Desc = "Automatically skips cutscenes",
     Value = false,
     Callback = function(state)
         if state then
@@ -2859,6 +2850,45 @@ Misc:Toggle({
     end
 })
 
+local antiFlingEnabled = false
+local antiFlingConnection
+Misc:Toggle({
+    Title = "Anti-Fling",
+    Desc = "Stops other players from flinging you",
+    Value = false,
+    Callback = function(state)
+        antiFlingEnabled = state
+        if state then
+            antiFlingConnection = RunService.RenderStepped:Connect(function()
+                pcall(function()
+                    local character = LocalPlayer.Character
+                    if character then
+                        local hrp = character:FindFirstChild("HumanoidRootPart")
+                        local humanoid = character:FindFirstChildOfClass("Humanoid")
+                        
+                        if hrp and humanoid then
+                            
+                            local currentVel = hrp.Velocity
+                            hrp.Velocity = Vector3.new(currentVel.X * 0.5, currentVel.Y, currentVel.Z * 0.5)
+                            hrp.RotVelocity = Vector3.new(0, 0, 0)
+                            
+                            
+                            if currentVel.Magnitude > 100 and humanoid:GetState() ~= Enum.HumanoidStateType.Jumping then
+                                hrp.Velocity = Vector3.new(currentVel.X * 0.3, currentVel.Y, currentVel.Z * 0.3)
+                            end
+                        end
+                    end
+                end)
+            end)
+        else
+            if antiFlingConnection then
+                antiFlingConnection:Disconnect()
+                antiFlingConnection = nil
+            end
+        end
+    end
+})
+
 
 LocalPlayer.CharacterAdded:Connect(function(character)
     if antiVoidEnabled then
@@ -2873,9 +2903,243 @@ end)
 Misc:Section({Title = "Flight"})
 Misc:Divider()
 
+-- Fly Variables
+local flyConnection, antiFallConnection
+local inputVector = Vector3.zero
+local currentVelocity = Vector3.zero
+local currentYVelocity = 0
+local lerpSpeed = 35
+local rotationLerpSpeed = 12
+local decelerationMultiplier = 1.8
+local joystickTouch, joystickStartPos
+local keysPressed = {}
+local lastPosition = Vector3.zero
+local velocityHistory = {}
+local frameCount = 0
+
+-- Utility Functions
+local function getParts()
+    local char = player.Character or player.CharacterAdded:Wait()
+    local humanoid = char:FindFirstChildOfClass("Humanoid")
+    local root = char:FindFirstChild("HumanoidRootPart")
+    return char, humanoid, root
+end
+
+-- Initialize Fly
+local function InitializeFly()
+    local char, humanoid, root = getParts()
+    if not (char and humanoid and root) then return end
+
+    humanoid.PlatformStand = true
+    humanoid:ChangeState(Enum.HumanoidStateType.Physics)
+    humanoid.AutoRotate = false -- Disable auto-rotation to control facing
+    root.Velocity = Vector3.zero
+    root.RotVelocity = Vector3.zero
+    root.AssemblyLinearVelocity = Vector3.zero
+    root.AssemblyAngularVelocity = Vector3.zero
+    root.CanCollide = false
+    lastPosition = root.Position
+    velocityHistory = {}
+    frameCount = 0
+end
+
+-- Input Handling
+local function setupInput()
+    UserInputService.TouchStarted:Connect(function(input)
+        if not flyEnabled or joystickTouch then return end
+        local screenSize = camera.ViewportSize
+        if input.Position.X < screenSize.X / 2 then
+            joystickTouch = input
+            joystickStartPos = input.Position
+        end
+    end)
+
+    UserInputService.TouchMoved:Connect(function(input)
+        if not flyEnabled or input ~= joystickTouch then return end
+        local delta = input.Position - joystickStartPos
+        local maxRadius = 100
+        if delta.Magnitude > maxRadius then
+            delta = delta.Unit * maxRadius
+        end
+        inputVector = Vector3.new(delta.X / maxRadius, 0, -delta.Y / maxRadius)
+    end)
+
+    UserInputService.TouchEnded:Connect(function(input)
+        if not flyEnabled or input ~= joystickTouch then return end
+        joystickTouch = nil
+        inputVector = Vector3.zero
+    end)
+
+    UserInputService.InputBegan:Connect(function(input, gameProcessed)
+        if gameProcessed or not flyEnabled then return end
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            keysPressed[input.KeyCode] = true
+        end
+    end)
+
+    UserInputService.InputEnded:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.Keyboard then
+            keysPressed[input.KeyCode] = false
+        end
+    end)
+end
+
+-- Fly Logic
+local function IsMoving()
+    return keysPressed[Enum.KeyCode.W] or keysPressed[Enum.KeyCode.A] or
+           keysPressed[Enum.KeyCode.S] or keysPressed[Enum.KeyCode.D] or
+           keysPressed[Enum.KeyCode.Q] or keysPressed[Enum.KeyCode.E] or
+           inputVector.Magnitude > 0.1
+end
+
+local function StartFlying()
+    InitializeFly()
+    setupInput()
+
+    if antiFallConnection then antiFallConnection:Disconnect() end
+    antiFallConnection = RunService.Heartbeat:Connect(function()
+        local _, humanoid, root = getParts()
+        if not (flyEnabled and humanoid and root) then return end
+
+        humanoid.PlatformStand = true
+        root.Velocity = Vector3.zero
+        root.RotVelocity = Vector3.zero
+        root.AssemblyLinearVelocity = Vector3.zero
+        root.AssemblyAngularVelocity = Vector3.zero
+    end)
+
+    if flyConnection then flyConnection:Disconnect() end
+    flyConnection = RunService.RenderStepped:Connect(function(dt)
+        local char, humanoid, root = getParts()
+        if not (flyEnabled and char and humanoid and root) then return end
+
+        frameCount = frameCount + 1
+        local camCF = camera.CFrame
+        local camRight = camCF.RightVector
+        local camForward = camCF.LookVector
+        local moveDir = Vector3.zero
+        local moving = IsMoving()
+
+        if keysPressed[Enum.KeyCode.W] or keysPressed[Enum.KeyCode.A] or
+           keysPressed[Enum.KeyCode.S] or keysPressed[Enum.KeyCode.D] or
+           keysPressed[Enum.KeyCode.Q] or keysPressed[Enum.KeyCode.E] then
+            local keyboardInput = Vector3.zero
+            if keysPressed[Enum.KeyCode.W] then keyboardInput += Vector3.new(0, 0, -1) end
+            if keysPressed[Enum.KeyCode.S] then keyboardInput += Vector3.new(0, 0, 1) end
+            if keysPressed[Enum.KeyCode.A] then keyboardInput += Vector3.new(-1, 0, 0) end
+            if keysPressed[Enum.KeyCode.D] then keyboardInput += Vector3.new(1, 0, 0) end
+
+            local camRightFlat = Vector3.new(camRight.X, 0, camRight.Z).Unit
+            local camForwardFlat = Vector3.new(camForward.X, 0, camForward.Z).Unit
+            moveDir = (camRightFlat * keyboardInput.X + camForwardFlat * keyboardInput.Z)
+            local targetVelocity = moveDir * flySpeed
+            currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 0.9))
+
+            local yInput = (keysPressed[Enum.KeyCode.E] and 1 or 0) - (keysPressed[Enum.KeyCode.Q] and 1 or 0)
+            local targetYVelocity = yInput * flySpeed * 1.5
+            currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt * 0.8, 0, 0.9)
+        elseif inputVector.Magnitude > 0.1 then
+            local camRightFlat = Vector3.new(camRight.X, 0, camRight.Z).Unit
+            local camForwardFlat = Vector3.new(camForward.X, 0, camForward.Z).Unit
+            moveDir = (camRightFlat * inputVector.X + camForwardFlat * -inputVector.Z)
+            local targetVelocity = moveDir * flySpeed
+            currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 0.9))
+            local targetYVelocity = -camForward.Y * inputVector.Z * flySpeed * 1.5
+            currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt * 0.8, 0, 0.9)
+        else
+            currentVelocity = currentVelocity:Lerp(Vector3.zero, math.clamp(lerpSpeed * dt * decelerationMultiplier, 0, 0.95))
+            currentYVelocity = currentYVelocity:Lerp(0, math.clamp(lerpSpeed * dt * decelerationMultiplier, 0, 0.95))
+        end
+
+        local finalVelocity = Vector3.new(currentVelocity.X, currentYVelocity, currentVelocity.Z)
+        local newPosition = root.Position + (finalVelocity * dt)
+
+        -- Always face camera's look direction
+        local lookDirection = Vector3.new(camForward.X, 0, camForward.Z).Unit
+        if moving and moveDir.Magnitude > 0.1 then
+            local currentLook = root.CFrame.LookVector
+            local currentLookFlat = Vector3.new(currentLook.X, 0, currentLook.Z).Unit
+            lookDirection = currentLookFlat:Lerp(moveDir, math.clamp(rotationLerpSpeed * dt, 0, 1))
+        end
+
+        local distance = (newPosition - root.Position).Magnitude
+        if distance > 0.005 then
+            if distance > 3 then
+                local steps = math.min(2, math.ceil(distance / 2.5))
+                for i = 1, steps do
+                    local stepPos = root.Position:Lerp(newPosition, i / steps)
+                    if lookDirection.Magnitude > 0 then
+                        root.CFrame = CFrame.lookAt(stepPos, stepPos + lookDirection, Vector3.yAxis)
+                    else
+                        root.CFrame = CFrame.new(stepPos)
+                    end
+                    if i < steps then
+                        task.wait(0.016)
+                    end
+                end
+            else
+                local randomMicro = Vector3.new(
+                    math.random(-1, 1) / 5000000,
+                    math.random(-1, 1) / 5000000,
+                    math.random(-1, 1) / 5000000
+                )
+                newPosition += randomMicro
+                if lookDirection.Magnitude > 0 then
+                    root.CFrame = CFrame.lookAt(newPosition, newPosition + lookDirection, Vector3.yAxis)
+                else
+                    root.CFrame = CFrame.new(newPosition)
+                end
+            end
+        else
+            if lookDirection.Magnitude > 0 then
+                root.CFrame = CFrame.lookAt(root.Position, root.Position + lookDirection, Vector3.yAxis)
+            end
+        end
+
+        table.insert(velocityHistory, finalVelocity)
+        if #velocityHistory > 10 then
+            table.remove(velocityHistory, 1)
+        end
+        lastPosition = root.Position
+    end)
+
+    player.CharacterAdded:Connect(function()
+        task.wait(0.1)
+        if flyEnabled then
+            InitializeFly()
+        end
+    end)
+
+    Workspace:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
+        camera = Workspace.CurrentCamera
+    end)
+end
+
+local function StopFlying()
+    if flyConnection then
+        flyConnection:Disconnect()
+        flyConnection = nil
+    end
+    if antiFallConnection then
+        antiFallConnection:Disconnect()
+        antiFallConnection = nil
+    end
+
+    local char, humanoid, root = getParts()
+    if humanoid then
+        humanoid.PlatformStand = false
+        humanoid:ChangeState(Enum.HumanoidStateType.Running)
+        humanoid.AutoRotate = true -- Restore auto-rotation
+    end
+    if root then
+        root.CanCollide = true
+    end
+end
+
 local flySpeed = 50
 local flyEnabled = false
 
+-- UI Setup
 Misc:Slider({
     Title = "Fly Speed",
     Desc = "Adjust flight speed",
@@ -2895,360 +3159,10 @@ Misc:Toggle({
     Value = false,
     Callback = function(state)
         flyEnabled = state
-        
         if state then
-            -- Initialize fly system
-            local UIS = game:GetService("UserInputService")
-            local RS = game:GetService("RunService")
-            local Players = game:GetService("Players")
-            local Workspace = game:GetService("Workspace")
-            local player = Players.LocalPlayer
-
-            local flyConnection = nil
-            local antiFallConnection = nil
-            local speed = flySpeed
-            local inputVector = Vector3.zero
-            local currentVelocity = Vector3.zero
-            local lerpSpeed = 35
-            local ySpeed = flySpeed
-            local currentYVelocity = 0
-
-            local rotationLerpSpeed = 12
-            local decelerationMultiplier = 1.8
-
-            local joystickTouch = nil
-            local joystickStartPos = nil
-            local keysPressed = {}
-
-            local camera = workspace.CurrentCamera
-
-            local lastPosition = Vector3.zero
-            local velocityHistory = {}
-            local frameCount = 0
-            local ref = cloneref or function(x) return x end
-            local S = function(n) return ref(game:GetService(n)) end
-
-            local Plrs, UIS, RS, Wk = S("Players"), S("UserInputService"), S("RunService"), S("Workspace")
-            local plr = Plrs.LocalPlayer
-
-            local function getParts()
-                local c = plr.Character or plr.CharacterAdded:Wait()
-                local hum, hrp
-                for _, d in ipairs(c:GetDescendants()) do
-                    if not hum and d:IsA("Humanoid") then hum = d end
-                    if not hrp and d:IsA("BasePart") and d.Name == "HumanoidRootPart" then hrp = d end
-                    if hum and hrp then break end
-                end
-                hum = hum or c:WaitForChild("Humanoid")
-                hrp = hrp or c:WaitForChild("HumanoidRootPart")
-                return c, hum, hrp
-            end
-
-            local function lockMouse(v)
-                if UIS and UIS.MouseEnabled then  -- Added nil check here
-                    UIS.MouseBehavior = v and Enum.MouseBehavior.LockCenter or Enum.MouseBehavior.Default
-                end
-            end
-
-            local rotCon, oldAR
-            local function faceCam(h, hrp, v)
-                if rotCon then rotCon:Disconnect() rotCon = nil end
-                if v then
-                    oldAR = h.AutoRotate
-                    h.AutoRotate = false
-                    rotCon = RS.RenderStepped:Connect(function()
-                        local cam = Wk.CurrentCamera
-                        if not (hrp and cam) then return end
-                        local lv = cam.CFrame.LookVector
-                        local flat = Vector3.new(lv.X, 0, lv.Z)
-                        if flat.Magnitude > 1e-4 then
-                            hrp.CFrame = CFrame.lookAt(hrp.Position, hrp.Position + flat.Unit, Vector3.yAxis)
-                        end
-                    end)
-                else
-                    if oldAR ~= nil then h.AutoRotate = oldAR end
-                end
-            end
-
-            local function reapply(v)
-                task.defer(function()
-                    local _, h, r = getParts()
-                    lockMouse(v)
-                    faceCam(h, r, v)
-                end)
-            end
-
-            local shiftLockEnabled = true
-            reapply(shiftLockEnabled)
-
-            plr.CharacterAdded:Connect(function()
-                reapply(shiftLockEnabled)
-            end)
-
-            local lastCam = Wk.CurrentCamera
-            Wk:GetPropertyChangedSignal("CurrentCamera"):Connect(function()
-                local c = Wk.CurrentCamera
-                if c ~= lastCam then
-                    lastCam = c
-                    reapply(shiftLockEnabled)
-                end
-            end)
-
-            local function InitializeFly()
-                local char = player.Character or player.CharacterAdded:Wait()
-                local root = char:WaitForChild("HumanoidRootPart")
-                local humanoid = char:WaitForChild("Humanoid")
-
-                humanoid.PlatformStand = true
-                humanoid:ChangeState(Enum.HumanoidStateType.Physics)
-                lastPosition = root.Position
-                velocityHistory = {}
-                frameCount = 0
-                
-                root.Velocity = Vector3.zero
-                root.RotVelocity = Vector3.zero
-                root.CanCollide = false
-            end
-
-            UIS.TouchStarted:Connect(function(input)
-                if flyEnabled and not joystickTouch then
-                    local screenSize = workspace.CurrentCamera.ViewportSize
-                    if input.Position.X < screenSize.X / 2 then
-                        joystickTouch = input
-                        joystickStartPos = input.Position
-                    end
-                end
-            end)
-
-            UIS.TouchMoved:Connect(function(input)
-                if flyEnabled and input == joystickTouch then
-                    local delta = input.Position - joystickStartPos
-                    local maxRadius = 100
-                    if delta.Magnitude > maxRadius then
-                        delta = delta.Unit * maxRadius
-                    end
-                    inputVector = Vector3.new(delta.X / maxRadius, 0, delta.Y / maxRadius)
-                end
-            end)
-
-            UIS.TouchEnded:Connect(function(input)
-                if flyEnabled and input == joystickTouch then
-                    joystickTouch = nil
-                    inputVector = Vector3.zero
-                end
-            end)
-
-            UIS.InputBegan:Connect(function(input, gameProcessed)
-                if gameProcessed or not flyEnabled then return end
-                if input.UserInputType == Enum.UserInputType.Keyboard then
-                    keysPressed[input.KeyCode] = true
-                end
-            end)
-
-            UIS.InputEnded:Connect(function(input, gameProcessed)
-                if input.UserInputType == Enum.UserInputType.Keyboard then
-                    keysPressed[input.KeyCode] = false
-                end
-            end)
-
-            player.CharacterAdded:Connect(function()
-                task.wait(0.1)
-                if flyEnabled then
-                    InitializeFly()
-                end
-            end)
-
-            local function IsMoving()
-                local hasKeyboardInput = keysPressed[Enum.KeyCode.W] or keysPressed[Enum.KeyCode.A] or 
-                                        keysPressed[Enum.KeyCode.S] or keysPressed[Enum.KeyCode.D] or
-                                        keysPressed[Enum.KeyCode.Q] or keysPressed[Enum.KeyCode.E]
-                
-                local hasTouchInput = inputVector.Magnitude > 0.1
-                
-                return hasKeyboardInput or hasTouchInput
-            end
-
-            local function StartFlyLoop()
-                if flyConnection then
-                    flyConnection:Disconnect()
-                end
-                
-                if antiFallConnection then
-                    antiFallConnection:Disconnect()
-                end
-                
-                antiFallConnection = RS.Heartbeat:Connect(function()
-                    local char = player.Character
-                    if not char or not flyEnabled then return end
-                    
-                    local root = char:FindFirstChild("HumanoidRootPart")
-                    local humanoid = char:FindFirstChild("Humanoid")
-                    if not root or not humanoid then return end
-                    
-                    pcall(function()
-                        humanoid.PlatformStand = true
-                    end)
-                    
-                    pcall(function()
-                        root.Velocity = Vector3.zero
-                        root.RotVelocity = Vector3.zero
-                        root.AssemblyLinearVelocity = Vector3.zero
-                        root.AssemblyAngularVelocity = Vector3.zero
-                    end)
-                end)
-                
-                flyConnection = RS.RenderStepped:Connect(function(dt)
-                    local char = player.Character
-                    if not char or not flyEnabled then return end
-                    
-                    local root = char:FindFirstChild("HumanoidRootPart")
-                    local humanoid = char:FindFirstChild("Humanoid")
-                    if not root or not humanoid then return end
-
-                    frameCount = frameCount + 1
-                    local camCF = camera.CFrame
-                    local camRight = camCF.RightVector
-                    local camForward = camCF.LookVector
-
-                    local moveDir = Vector3.zero
-                    local moving = IsMoving()
-                    
-                    if keysPressed[Enum.KeyCode.W] or keysPressed[Enum.KeyCode.A] or 
-                       keysPressed[Enum.KeyCode.S] or keysPressed[Enum.KeyCode.D] or
-                       keysPressed[Enum.KeyCode.Q] or keysPressed[Enum.KeyCode.E] then
-                        
-                        local keyboardInput = Vector3.zero
-                        if keysPressed[Enum.KeyCode.W] then keyboardInput = keyboardInput + Vector3.new(0, 0, -1) end
-                        if keysPressed[Enum.KeyCode.S] then keyboardInput = keyboardInput + Vector3.new(0, 0, 1) end
-                        if keysPressed[Enum.KeyCode.A] then keyboardInput = keyboardInput + Vector3.new(-1, 0, 0) end
-                        if keysPressed[Enum.KeyCode.D] then keyboardInput = keyboardInput + Vector3.new(1, 0, 0) end
-                        
-                        local camRightFlat = Vector3.new(camRight.X, 0, camRight.Z).Unit
-                        local camForwardFlat = Vector3.new(camForward.X, 0, camForward.Z).Unit
-                        
-                        moveDir = (camRightFlat * keyboardInput.X + camForwardFlat * keyboardInput.Z)
-                        local targetVelocity = moveDir * speed
-                        currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 0.9))
-                        
-                        local yInput = 0
-                        if keysPressed[Enum.KeyCode.E] then yInput = 1 end
-                        if keysPressed[Enum.KeyCode.Q] then yInput = -1 end
-                        
-                        local targetYVelocity = yInput * ySpeed * 1.5
-                        currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt * 0.8, 0, 0.9)
-                        
-                    elseif inputVector.Magnitude > 0.1 then
-                        local camRightFlat = Vector3.new(camRight.X, 0, camRight.Z).Unit
-                        local camForwardFlat = Vector3.new(camForward.X, 0, camForward.Z).Unit
-                        
-                        moveDir = (camRightFlat * inputVector.X + camForwardFlat * -inputVector.Z)
-                        local targetVelocity = moveDir * speed
-                        currentVelocity = currentVelocity:Lerp(targetVelocity, math.clamp(lerpSpeed * dt, 0, 0.9))
-                        
-                        local targetYVelocity = -camForward.Y * inputVector.Z * ySpeed * 1.5
-                        currentYVelocity = currentYVelocity + (targetYVelocity - currentYVelocity) * math.clamp(lerpSpeed * dt * 0.8, 0, 0.9)
-                    else
-                        currentVelocity = currentVelocity:Lerp(Vector3.zero, math.clamp(lerpSpeed * dt * decelerationMultiplier, 0, 0.95))
-                        currentYVelocity = currentYVelocity:Lerp(0, math.clamp(lerpSpeed * dt * decelerationMultiplier, 0, 0.95))
-                    end
-
-                    local finalVelocity = Vector3.new(currentVelocity.X, currentYVelocity, currentVelocity.Z)
-                    local newPosition = root.Position + (finalVelocity * dt)
-                    
-                    local lookDirection
-                    if moving and moveDir.Magnitude > 0.1 then
-                        local currentLook = root.CFrame.LookVector
-                        local currentLookFlat = Vector3.new(currentLook.X, 0, currentLook.Z).Unit
-                        lookDirection = currentLookFlat:Lerp(moveDir, math.clamp(rotationLerpSpeed * dt, 0, 1))
-                    else
-                        local camLookVector = camCF.LookVector
-                        lookDirection = Vector3.new(camLookVector.X, 0, camLookVector.Z).Unit
-                    end
-                    
-                    local distance = (newPosition - root.Position).Magnitude
-                    if distance > 0.005 then
-                        if distance > 3 then
-                            local steps = math.min(2, math.ceil(distance / 2.5))
-                            for i = 1, steps do
-                                local stepPos = root.Position:Lerp(newPosition, i / steps)
-                                pcall(function()
-                                    if lookDirection.Magnitude > 0 then
-                                        root.CFrame = CFrame.lookAt(stepPos, stepPos + lookDirection)
-                                    else
-                                        root.CFrame = CFrame.new(stepPos)
-                                    end
-                                end)
-                                if i < steps then
-                                    task.wait(0.016)
-                                end
-                            end
-                        else
-                            local randomMicro = Vector3.new(
-                                math.random(-1, 1) / 5000000,
-                                math.random(-1, 1) / 5000000,
-                                math.random(-1, 1) / 5000000
-                            )
-                            newPosition = newPosition + randomMicro
-                            
-                            pcall(function()
-                                if lookDirection.Magnitude > 0 then
-                                    root.CFrame = CFrame.lookAt(newPosition, newPosition + lookDirection)
-                                else
-                                    root.CFrame = CFrame.new(newPosition)
-                                end
-                            end)
-                        end
-                    else
-                        pcall(function()
-                            if lookDirection.Magnitude > 0 then
-                                root.CFrame = CFrame.lookAt(root.Position, root.Position + lookDirection)
-                            end
-                        end)
-                    end
-                    
-                    table.insert(velocityHistory, finalVelocity)
-                    if #velocityHistory > 10 then
-                        table.remove(velocityHistory, 1)
-                    end
-                    
-                    lastPosition = root.Position
-                end)
-            end
-
-            InitializeFly()
-            StartFlyLoop()
+            StartFlying()
         else
-            -- Clean up fly system
-            if flyConnection then
-                flyConnection:Disconnect()
-                flyConnection = nil
-            end
-            
-            if antiFallConnection then
-                antiFallConnection:Disconnect()
-                antiFallConnection = nil
-            end
-            
-            -- Reset shiftlock/mouse behavior with proper nil check
-            local UIS = game:GetService("UserInputService")
-            if UIS and UIS.MouseEnabled then
-                UIS.MouseBehavior = Enum.MouseBehavior.Default
-            end
-            
-            -- Reset character state
-            local char = game.Players.LocalPlayer.Character
-            if char then
-                local humanoid = char:FindFirstChildOfClass("Humanoid")
-                if humanoid then
-                    humanoid.PlatformStand = false
-                    humanoid:ChangeState(Enum.HumanoidStateType.Running)
-                end
-                
-                local root = char:FindFirstChild("HumanoidRootPart")
-                if root then
-                    root.CanCollide = true
-                end
-            end
+            StopFlying()
         end
     end
 })
