@@ -1,2 +1,94 @@
-script_key="okHaHeSwQaCgnaXIFTUiPnnFhdCwyKsf";
-loadstring(game:HttpGet("https://raw.githubusercontent.com/raydjs/napoleonHub/refs/heads/main/src.lua"))()
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+
+local player = Players.LocalPlayer
+
+-- Create ScreenGui
+local screenGui = Instance.new("ScreenGui")
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+-- Create TextButton
+local button = Instance.new("TextButton")
+button.Name = "GhostJab"
+button.Parent = screenGui
+button.Size = UDim2.new(0, 150, 0, 50)
+button.Position = UDim2.new(0.5, -75, 0.5, -25)
+button.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+button.TextColor3 = Color3.fromRGB(255, 255, 255)
+button.Text = "Ghost Jab"
+button.Font = Enum.Font.SourceSansBold
+button.TextSize = 20
+button.Active = true
+button.Draggable = true
+
+-- Protection variables
+local lastFireTime = 0
+local minFireDelay = 0.2 -- Minimum delay between fires (in seconds)
+local fireCount = 0
+local maxFiresPerMinute = 55 -- Limit maximum fires per minute
+local fireTimes = {}
+
+-- Function to safely fire the remote
+local function safeFireRemote()
+    local currentTime = tick()
+    
+    -- Rate limiting checks
+    if currentTime - lastFireTime < minFireDelay then
+        return false -- Too soon since last fire
+    end
+    
+    -- Clean up old fire times (older than 60 seconds)
+    for i = #fireTimes, 1, -1 do
+        if currentTime - fireTimes[i] > 60 then
+            table.remove(fireTimes, i)
+        end
+    end
+    
+    -- Check if we've exceeded the maximum fires per minute
+    if #fireTimes >= maxFiresPerMinute then
+        return false -- Rate limit exceeded
+    end
+    
+    -- Record this fire time
+    table.insert(fireTimes, currentTime)
+    lastFireTime = currentTime
+    
+    -- Add a small random delay to make pattern detection harder
+    task.wait(math.random(5, 30) / 100) -- 0.05 to 0.3 seconds
+    
+    -- Fire the remote with the data
+    local args = {
+        {
+            {
+                buffer.fromstring("\019\000\000\0009901000102554057062\000")
+            },
+            "\014"
+        }
+    }
+    
+    -- Use pcall to catch any errors silently
+    local success, result = pcall(function()
+        ReplicatedStorage:WaitForChild("BridgeNet2"):WaitForChild("dataRemoteEvent"):FireServer(unpack(args))
+    end)
+    
+    return success
+end
+
+-- Button click with protection
+button.MouseButton1Click:Connect(function()
+    safeFireRemote()
+end)
+
+-- Keep AbilityEnergy at 100
+task.spawn(function()
+    local states = workspace:WaitForChild("States")
+    local charData = states:WaitForChild(player.Name):WaitForChild("CharacterData")
+    local abilityEnergy = charData:WaitForChild("AbilityEnergy")
+
+    RunService.RenderStepped:Connect(function()
+        if abilityEnergy.Value ~= 100 then
+            abilityEnergy.Value = 100
+        end
+    end)
+end)
